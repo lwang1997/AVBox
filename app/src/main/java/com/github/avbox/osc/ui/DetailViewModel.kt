@@ -17,6 +17,7 @@ import com.github.avbox.osc.data.VodFollow
 import com.github.avbox.osc.net.SearchHelper
 import com.github.avbox.osc.player.PlaybackService
 import com.github.avbox.osc.player.PlaybackSession
+import com.github.avbox.osc.player.state.PlaybackSettingsState
 import com.github.avbox.osc.sourcedata.SourceViewModel
 import com.github.avbox.osc.util.AppContextHolder
 import com.github.avbox.osc.api.TmdbApi
@@ -544,7 +545,8 @@ class DetailViewModel : ViewModel(), TmdbPosterCache {
 
     internal fun applyPlaybackEntry(entry: DetailPlaybackEntry, resumable: Boolean = false) {
         val plan = DetailPlaybackPolicy.plan(entry, resumable)
-        if (plan.enterFullScreen) enterFullscreen()
+        // 详情页播放设置：直接全屏（默认，保持原行为）/ 留在小窗（跳过自动全屏，手动全屏不受影响）
+        if (plan.enterFullScreen && PlaybackSettingsState.config.detailPlayFullscreen) enterFullscreen()
         if (plan.startPlayback) _playSignal.value += 1
     }
 

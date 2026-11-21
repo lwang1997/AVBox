@@ -44,6 +44,7 @@ import com.github.avbox.osc.R
 import com.github.avbox.osc.io.FileUtils
 import com.github.avbox.osc.net.HttpClients
 import com.github.avbox.osc.ui.ConfigManageActivity
+import com.github.avbox.osc.ui.LogViewActivity
 import com.github.avbox.osc.ui.PlaySettingsActivity
 import com.github.avbox.osc.ui.PreferenceSettingsActivity
 import com.github.avbox.osc.ui.ThemeSettingsActivity
@@ -306,6 +307,15 @@ fun SettingsPage(
                         subtitle = stringResource(R.string.settings_about_subtitle),
                         iconRes = R.drawable.ic_settings_about,
                         onClick = { aboutSheet = true },
+                    )
+                }
+
+                SettingsCard(SettingsCardPosition.MIDDLE) {
+                    SettingsRow(
+                        title = stringResource(R.string.settings_logs_title),
+                        subtitle = stringResource(R.string.settings_logs_subtitle),
+                        iconRes = R.drawable.ic_settings_log,
+                        onClick = { LogViewActivity.start(context) },
                     )
                 }
 

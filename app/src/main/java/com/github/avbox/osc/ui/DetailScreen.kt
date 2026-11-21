@@ -12,8 +12,11 @@ import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.ContainedLoadingIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -24,7 +27,6 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
@@ -36,12 +38,18 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.asPaddingValues
+import androidx.compose.foundation.layout.statusBars
+import kotlin.math.roundToInt
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.IntOffset
+import androidx.compose.ui.unit.IntSize
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.lifecycle.Lifecycle
@@ -70,7 +78,6 @@ import kotlinx.coroutines.withContext
 import com.github.avbox.osc.ui.page.jumpToSearch
 
 private const val EntrySlideDurationMs = 300
-private const val ContentSlideRatio = 0.2f
 
 private const val FlatScrollScrimAlpha = 0.45f
 
@@ -122,7 +129,7 @@ fun DetailScreen(activity: DetailActivity, vm: DetailViewModel) {
     val isLandscapeNow = configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
     val fullBox = DetailFullScreenFrame.fullBox(rotating, full, isLandscapeNow)
     val inTransition = enteringFullscreen || exitingFullscreen
-    var slideWidthPx by remember { mutableFloatStateOf(0f) }
+    var rootSize by remember { mutableStateOf(IntSize.Zero) }
 
     val container = activity.playContainer
     val scope = rememberCoroutineScope()
@@ -246,7 +253,7 @@ fun DetailScreen(activity: DetailActivity, vm: DetailViewModel) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .onSizeChanged { slideWidthPx = it.width.toFloat() }
+                .onSizeChanged { rootSize = it }
                 .background(MaterialTheme.colorScheme.surface),
         ) {
             if (flatHero) {
@@ -292,11 +299,7 @@ fun DetailScreen(activity: DetailActivity, vm: DetailViewModel) {
             }
 
             Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .offset {
-                        IntOffset((-slideProgress() * slideWidthPx * ContentSlideRatio).toInt(), 0)
-                    },
+                modifier = Modifier.fillMaxSize(),
             ) {
                 if (!fullBox || exitingFullscreen) {
                     when (val state = pageState) {
@@ -342,12 +345,68 @@ fun DetailScreen(activity: DetailActivity, vm: DetailViewModel) {
 
             val playerContainer = container
             if (playerContainer != null) {
+                // 小窗：窗口按视频画面宽高比收进 Hero 约束框（不裁剪、无黑边）；全屏=铺满，progress 插值
+                val progress = slideProgress()
+                val heroConstraintPx = if (flatHero) {
+                    rootSize.height * 0.5f
+                } else {
+                    with(density) { heroImageHeight(configuration.screenHeightDp).toPx() }
+                }
+                val rect = playerContainer.uiState().videoRect
+                val baseW: Float
+                val baseH: Float
+                if (!rect.empty && rect.width > 0 && rect.height > 0 && rootSize.width > 0) {
+                    val fitScale = minOf(
+                        rootSize.width / rect.width.toFloat(),
+                        heroConstraintPx / rect.height.toFloat(),
+                    )
+                    baseW = rect.width * fitScale
+                    baseH = rect.height * fitScale
+                } else {
+                    baseW = rootSize.width.toFloat()
+                    baseH = heroConstraintPx
+                }
+                val playerWidthPx = baseW + (rootSize.width - baseW) * progress
+                val playerHeightPx = baseH + (rootSize.height - baseH) * progress
+
+                // 默认顶边 = 状态栏 + 顶部按钮行下方（红框区域）；小窗内可拖动，位置记忆
+                val topActionsBottomPx = with(density) {
+                    (WindowInsets.statusBars.asPaddingValues().calculateTopPadding() + 56.dp).toPx()
+                }
+                var dragX by remember { mutableStateOf(Float.NaN) }
+                var dragY by remember { mutableStateOf(Float.NaN) }
+                val maxPosX = (rootSize.width - playerWidthPx).coerceAtLeast(0f)
+                val maxPosY = (rootSize.height - playerHeightPx).coerceAtLeast(0f)
+                val posX = (if (dragX.isNaN()) maxPosX / 2f else dragX).coerceIn(0f, maxPosX)
+                val posY = (if (dragY.isNaN()) topActionsBottomPx else dragY).coerceIn(0f, maxPosY)
+                val draggable = !full && !inTransition
+
                 Box(
                     modifier = Modifier
-                        .fillMaxSize()
-                        .offset {
-                            IntOffset(((1f - slideProgress()) * slideWidthPx).toInt(), 0)
-                        },
+                        .width(with(density) { playerWidthPx.toDp() })
+                        .height(with(density) { playerHeightPx.toDp() })
+                        .offset { IntOffset(posX.roundToInt(), posY.roundToInt()) }
+                        .then(
+                            if (draggable) {
+                                Modifier.pointerInput(playerWidthPx, playerHeightPx, rootSize) {
+                                    detectDragGestures(
+                                        onDragStart = {
+                                            if (dragX.isNaN()) {
+                                                dragX = posX
+                                                dragY = posY
+                                            }
+                                        },
+                                        onDrag = { change, drag ->
+                                            dragX = (dragX + drag.x).coerceIn(0f, maxPosX)
+                                            dragY = (dragY + drag.y).coerceIn(0f, maxPosY)
+                                            change.consume()
+                                        },
+                                    )
+                                }
+                            } else {
+                                Modifier
+                            },
+                        ),
                 ) {
                     AndroidView(
                         factory = { playerContainer },

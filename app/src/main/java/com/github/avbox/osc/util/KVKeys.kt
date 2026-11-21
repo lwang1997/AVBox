@@ -53,6 +53,8 @@ object KVKeys {
     const val LIVE_GROUP_LIST = "live_group_list"
     const val LIVE_API_URL = "live_api_url"
     const val M3U8_PURIFY = "m3u8_purify"
+    const val LOG_LEVEL = "log_level"
+    const val DETAIL_PLAY_FULLSCREEN = "detail_play_fullscreen"
     const val AUTO_SWITCH_LINE = "auto_switch_line"
     const val AUTO_SWITCH_LINE_DEFAULT = true
     const val COLLECT_COLUMNS = "collect_columns"

@@ -16,6 +16,47 @@ object AppLog {
     private var TAG = "TVBox-runtime"
     private const val MAX_LOG_LENGTH = 3000
 
+    /** 应用内日志查看器的环形缓冲（级别过滤在采集端，KV LOG_LEVEL：0=Debug 1=Error 2=None）。 */
+    class LogLine(val time: Long, val level: Char, val text: String)
+
+    private const val RING_MAX = 1500
+    private val ring = ArrayDeque<LogLine>()
+
+    private fun captureEnabled(level: Char): Boolean = try {
+        when (KV.get(KVKeys.LOG_LEVEL, 0)) {
+            1 -> level == 'E'
+            2 -> false
+            else -> true
+        }
+    } catch (t: Throwable) {
+        level == 'E'
+    }
+
+    private fun capture(level: Char, msg: String?) {
+        if (msg == null) return
+        if (!captureEnabled(level)) return
+        val line = LogLine(System.currentTimeMillis(), level, msg)
+        synchronized(ring) {
+            if (ring.size >= RING_MAX) ring.removeFirst()
+            ring.addLast(line)
+        }
+    }
+
+    @JvmStatic
+    fun snapshot(): List<LogLine> = synchronized(ring) { ring.toList() }
+
+    @JvmStatic
+    fun exportText(): String {
+        val fmt = SimpleDateFormat("MM-dd HH:mm:ss.SSS", Locale.US)
+        val sb = StringBuilder()
+        for (line in snapshot()) {
+            sb.append(fmt.format(Date(line.time))).append(' ')
+                .append(line.level).append(' ').append(line.text).append('\n')
+        }
+        return sb.toString()
+    }
+
+
     private val FILE_LOG = BuildConfig.DEBUG
     private val FILE_LOG_PREFIXES = arrayOf("echo-preload", "echo-setDataSource", "echo-play-cache", "echo-kv", "echo-progress", "echo-bar-draw", "echo-exo", "echo-music", "echo-lyric", "echo-sub", "echo-danmu", "echo-p2", "echo-p3", "echo-p4", "echo-p5", "clearCache", "echo--jar", "echo-local-src", "echo-setTrack", "echo-autoRetry", "echo-player", "echo-switch", "echo-goPlayUrl", "echo-history", "echo-iso", "echo-render", "echo-surface", "echo-output-size", "echo-picture", "echo-anime4k", "echo--list", "echo--getList", "echo--parse", "echo--getSort", "echo--sort", "echo-detail", "echo-thunder", "echo-proxy", "echo-home-backdrop", "echo-cast", "echo-resolvePlayUrl", "echo-playM3u8", "echo-tmdb", "echo-live", "echo-load", "echo-zero-start", "echo-storage", "echo-config-refresh", "echo-boot")
     private const val FILE_LOG_NAME = "preload_debug.log"
@@ -62,12 +103,14 @@ object AppLog {
 
     @JvmStatic
     fun e(msg: String?) {
+        capture('E', msg)
         Log.e(TAG, "" + msg)
         fileLog("E", msg.toString())
     }
 
     @JvmStatic
     fun i(msg: String?) {
+        capture('I', msg)
         if (!BuildConfig.DEBUG) return
         Log.i(TAG, "" + msg)
         fileLog("I", msg.toString())
@@ -81,6 +124,7 @@ object AppLog {
 
     @JvmStatic
     fun d(tag: String?, msg: String?) {
+        capture('D', if (tag == null) msg else "$tag: $msg")
         if (!BuildConfig.DEBUG) return
         Log.d(TAG, tag + ": " + msg)
         fileLog("D", msg.toString())
@@ -88,6 +132,7 @@ object AppLog {
 
     @JvmStatic
     fun e(tag: String?, msg: String?, tr: Throwable?) {
+        capture('E', if (tr == null) "$tag: $msg" else "$tag: $msg | $tr")
         Log.e(TAG, tag + ": " + msg, tr)
         fileLog("E", msg.toString())
         if (tr != null) tr.printStackTrace()
@@ -100,12 +145,14 @@ object AppLog {
 
     @JvmStatic
     fun longI(prefix: String?, msg: String?) {
+        capture('I', (prefix ?: "") + msg)
         if (!BuildConfig.DEBUG) return
         longLog(Log.INFO, prefix, msg)
     }
 
     @JvmStatic
     fun longE(prefix: String?, msg: String?) {
+        capture('E', (prefix ?: "") + msg)
         longLog(Log.ERROR, prefix, msg)
     }
 

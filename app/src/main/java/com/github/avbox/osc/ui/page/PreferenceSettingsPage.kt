@@ -82,10 +82,24 @@ fun PreferenceSettingsScreen(onNavigateBack: () -> Unit) {
                 SettingsCard(SettingsCardPosition.FIRST) {
                     LanguageRow()
                 }
-                SettingsCard(SettingsCardPosition.LAST) {
+                SettingsCard(SettingsCardPosition.MIDDLE) {
                     CollectColumnsRow(
                         columns = uiConfig.collectColumns,
                         onSelect = { columns -> UiSettingsState.collectColumns = columns },
+                    )
+                }
+                SettingsCard(SettingsCardPosition.LAST) {
+                    val detailPlayLabels = listOf(
+                        stringResource(R.string.settings_detail_play_fullscreen),
+                        stringResource(R.string.settings_detail_play_inline),
+                    )
+                    SettingsOptionMenuRow(
+                        title = stringResource(R.string.settings_detail_play),
+                        leadingIconRes = R.drawable.ic_pref_detail_play,
+                        valueText = detailPlayLabels[if (playbackConfig.detailPlayFullscreen) 0 else 1],
+                        options = detailPlayLabels,
+                        selectedIndex = if (playbackConfig.detailPlayFullscreen) 0 else 1,
+                        onSelect = { idx -> PlaybackSettingsState.detailPlayFullscreen = idx == 0 },
                     )
                 }
             }

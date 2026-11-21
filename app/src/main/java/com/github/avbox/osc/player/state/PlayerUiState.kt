@@ -620,6 +620,9 @@ interface PlayerActions {
     fun onBackClicked()
     fun onLockClicked()
 
+    /** 小窗（预览）模式下底栏的全屏按钮。 */
+    fun onFullscreenClicked() {}
+
     fun onParseSelected(position: Int)
 
     fun onSeekStarted()

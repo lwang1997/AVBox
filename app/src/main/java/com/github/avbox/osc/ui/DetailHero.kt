@@ -71,6 +71,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.compose.LocalLifecycleOwner
@@ -112,6 +113,10 @@ private const val DetailTopScrimAlpha = 0.32f
 private const val HeroCircleAlpha = 0.6f
 
 private const val HERO_IMAGE_HEIGHT_RATIO = 0.50f
+
+/** 顶部图高度（详情页小窗播放器与 Hero 图共用同一公式，保证窗口对齐）。 */
+internal fun heroImageHeight(screenHeightDp: Int): Dp =
+    (screenHeightDp * HERO_IMAGE_HEIGHT_RATIO).dp.coerceIn(HeroImageMinHeight, HeroImageMaxHeight)
 
 private const val HERO_ROLL_INTERVAL_MS = 5000L
 
@@ -243,9 +248,7 @@ internal fun DetailHero(
         ?: description?.takeIf { it.isNotBlank() }
     var descriptionExpanded by rememberSaveable(title) { mutableStateOf(false) }
     val configuration = LocalConfiguration.current
-    val imageHeight = (configuration.screenHeightDp * HERO_IMAGE_HEIGHT_RATIO)
-        .dp
-        .coerceIn(HeroImageMinHeight, HeroImageMaxHeight)
+    val imageHeight = heroImageHeight(configuration.screenHeightDp)
     val flat = flatHeroLayout(
         configuration.smallestScreenWidthDp,
         configuration.screenWidthDp,

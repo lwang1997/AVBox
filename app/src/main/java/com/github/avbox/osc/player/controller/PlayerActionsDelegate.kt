@@ -267,6 +267,11 @@ internal class PlayerActionsDelegate(private val host: VideoPlayerController) : 
         (host.playerActivity() as? ComponentActivity)?.onBackPressedDispatcher?.onBackPressed()
     }
 
+    override fun onFullscreenClicked() {
+        (host.playerActivity() as? com.github.avbox.osc.player.PageHost)?.onPlayerFullscreenRequest()
+        keepControlsAlive()
+    }
+
     override fun onLockClicked() {
         val newLocked = !host.state.locked
         host.state.updateLocked(newLocked)

@@ -7,6 +7,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.detectHorizontalDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -19,6 +20,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -116,7 +118,7 @@ fun PlayerBottomBar(
             }
         }
 
-        if (portraitActions) {
+        if (portraitActions && !state.previewMode) {
             PlayerActionIcons(
                 actions = actions,
                 modifier = Modifier
@@ -128,32 +130,54 @@ fun PlayerBottomBar(
             )
         }
 
-        Row(
-            verticalAlignment = Alignment.CenterVertically,
-            modifier = Modifier.padding(end = if (state.previewMode) 44.dp else 0.dp),
-        ) {
-            if (state.previewMode) {
-                PreviewPlayPauseButton(state, actions)
-            }
-
-            if (state.previewMode) {
-                CurrentTimeText(state)
-            }
-            PlayerSeekRow(
-                state = state,
-                actions = actions,
+        if (state.previewMode) {
+            // 小窗底栏：整组控件水平居中，进度条占约 45% 宽
+            BoxWithConstraints(
                 modifier = Modifier
-                    .weight(1f)
-                    .padding(horizontal = if (state.previewMode) 8.dp else 0.dp),
-            )
-            if (state.previewMode) {
-                Text(
-                    text = stringForTime(state.duration),
-                    color = Color.White,
-                    fontSize = playerTextSize(R.dimen.ts_20),
-                    fontWeight = FontWeight.Medium,
-                    maxLines = 1,
-                    modifier = Modifier.widthIn(min = 48.dp),
+                    .fillMaxWidth()
+                    .padding(end = 44.dp),
+                contentAlignment = Alignment.Center,
+            ) {
+                val seekWidth = maxWidth * 0.45f
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    PreviewPlayPauseButton(state, actions)
+                    CurrentTimeText(state)
+                    PlayerSeekRow(
+                        state = state,
+                        actions = actions,
+                        modifier = Modifier
+                            .width(seekWidth)
+                            .padding(horizontal = 8.dp),
+                    )
+                    Text(
+                        text = stringForTime(state.duration),
+                        color = Color.White,
+                        fontSize = playerTextSize(R.dimen.ts_20),
+                        fontWeight = FontWeight.Medium,
+                        maxLines = 1,
+                        modifier = Modifier.widthIn(min = 48.dp),
+                    )
+                    Box(
+                        modifier = Modifier
+                            .padding(start = 8.dp)
+                            .size(36.dp)
+                            .clickable { actions.onFullscreenClicked() },
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        Image(
+                            painter = painterResource(R.drawable.player_ic_fullscreen),
+                            contentDescription = stringResource(R.string.player_fullscreen),
+                            modifier = Modifier.size(20.dp),
+                        )
+                    }
+                }
+            }
+        } else {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                PlayerSeekRow(
+                    state = state,
+                    actions = actions,
+                    modifier = Modifier.weight(1f),
                 )
             }
         }

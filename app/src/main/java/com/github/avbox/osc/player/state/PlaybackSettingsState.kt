@@ -18,6 +18,7 @@ data class PlaybackSettingsConfig(
     val preferAac: Boolean,
     val autoSwitchLine: Boolean,
     val m3u8Purify: Boolean,
+    val detailPlayFullscreen: Boolean,
     val bufferTimes: Int,
     val playCache: Boolean,
     val exoCacheSizeMb: Int,
@@ -45,6 +46,7 @@ object PlaybackSettingsState {
         preferAac = KV.get(KVKeys.PLAY_PREFER_AAC, false),
         autoSwitchLine = KV.get(KVKeys.AUTO_SWITCH_LINE, KVKeys.AUTO_SWITCH_LINE_DEFAULT),
         m3u8Purify = KV.get(KVKeys.M3U8_PURIFY, false),
+        detailPlayFullscreen = KV.get(KVKeys.DETAIL_PLAY_FULLSCREEN, true),
         bufferTimes = KV.get(KVKeys.BUFFER_TIMES, KVKeys.BUFFER_TIMES_DEFAULT),
         playCache = KV.get(KVKeys.PLAY_CACHE, false),
         exoCacheSizeMb = KV.get(KVKeys.EXO_CACHE_SIZE_MB, KVKeys.EXO_CACHE_SIZE_MB_DEFAULT),
@@ -123,6 +125,13 @@ object PlaybackSettingsState {
         set(value) {
             KV.put(KVKeys.M3U8_PURIFY, value)
             current = current.copy(m3u8Purify = value)
+        }
+
+    var detailPlayFullscreen: Boolean
+        get() = current.detailPlayFullscreen
+        set(value) {
+            KV.put(KVKeys.DETAIL_PLAY_FULLSCREEN, value)
+            current = current.copy(detailPlayFullscreen = value)
         }
 
     var bufferTimes: Int

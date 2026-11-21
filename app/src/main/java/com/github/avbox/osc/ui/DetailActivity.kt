@@ -27,6 +27,7 @@ import com.github.avbox.osc.player.PlaybackController
 import com.github.avbox.osc.player.PlaybackService
 import com.github.avbox.osc.player.engine.MediaSources
 import com.github.avbox.osc.player.core.PlayState
+import com.github.avbox.osc.player.state.PlaybackSettingsState
 import com.github.avbox.osc.ui.player.PlayContainer
 import com.github.avbox.osc.ui.settings.UiSettingsState
 import com.github.avbox.osc.ui.theme.AVBoxTheme
@@ -111,6 +112,11 @@ class DetailActivity : BaseActivity(), PageHost {
                     vm.onFullScreenToggleRequested(false, playbackFacts())
                     container?.hideTipOnUiThread()
                 } else {
+                    // 悬浮（小窗）播放器开着时，X/返回只关闭播放器，留在详情页
+                    if (container != null) {
+                        closeInlinePlayer()
+                        return
+                    }
                     if (vm.backToPreviousTarget()) {
                         pendingEpisodeSync = false
                         return
@@ -179,6 +185,16 @@ class DetailActivity : BaseActivity(), PageHost {
         playContainer = null
     }
 
+    /** 关闭悬浮（小窗）播放器：停止并释放容器，留在详情页。 */
+    fun closeInlinePlayer() {
+        val container = playContainer ?: return
+        container.cancelCastWait()
+        container.endCastPrepare()
+        if (container.hasClaimedPlayback()) container.stopForExitFullscreen()
+        releasePlayContainer()
+        AppLog.i("echo-detail: inline player closed")
+    }
+
     override fun context(): Context = this
 
     override fun isPageAlive(): Boolean = !isFinishing && !isDestroyed
@@ -197,6 +213,11 @@ class DetailActivity : BaseActivity(), PageHost {
 
     override fun onPlaybackLinesExhausted(): Boolean = startDetailFallbackAfterLinesExhausted()
 
+    override fun onPlayerFullscreenRequest() {
+        if (vm.fullScreen.value || vm.enteringFullscreen.value || vm.exitingFullscreen.value) return
+        vm.onFullScreenToggleRequested(true, playbackFacts())
+    }
+
     override fun showEpisodeSheet() {
         if (vm.vodInfo != null) vm.showEpisodeSheet()
     }
@@ -212,6 +233,14 @@ class DetailActivity : BaseActivity(), PageHost {
             return
         }
         container.setData(session)
+        applyInlineOrientationFreedom()
+    }
+
+    /** 小窗模式：播放期间放开方向锁，允许横屏触发全屏（见 onConfigurationChanged）。 */
+    private fun applyInlineOrientationFreedom() {
+        if (PlaybackSettingsState.config.detailPlayFullscreen) return
+        if (vm.fullScreen.value || vm.enteringFullscreen.value) return
+        requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
     }
 
     fun ensurePlaying(): PlayContainer {
@@ -344,7 +373,13 @@ class DetailActivity : BaseActivity(), PageHost {
     fun applyFullscreen(full: Boolean) {
         if (appliedFullscreen == full) return
         appliedFullscreen = full
-        requestedOrientation = orientationPolicyValue()
+        val landNow = resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
+        // 横屏状态下进入全屏保持横屏，避免被竖屏策略拉回去再翻转一次
+        requestedOrientation = if (full && landNow) {
+            ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        } else {
+            orientationPolicyValue()
+        }
         if (full) {
             armVideoSizeWatch()
             hideSysBar()
@@ -388,6 +423,14 @@ class DetailActivity : BaseActivity(), PageHost {
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
         settleRotationAfterExit()
+        // 小窗播放中横屏 → 切到全屏播放
+        if (newConfig.orientation == Configuration.ORIENTATION_LANDSCAPE &&
+            !vm.fullScreen.value && !vm.enteringFullscreen.value &&
+            playContainer?.isPlaybackActive() == true
+        ) {
+            requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+            vm.onFullScreenToggleRequested(true, playbackFacts())
+        }
     }
 
     fun settleRotationAfterExit() {

@@ -19,4 +19,7 @@ interface PageHost {
     fun showEpisodeSheet()
 
     fun onPlaybackLinesExhausted(): Boolean
+
+    /** 小窗播放器点「全屏」时由页面接管（详情页进全屏）。 */
+    fun onPlayerFullscreenRequest() {}
 }
