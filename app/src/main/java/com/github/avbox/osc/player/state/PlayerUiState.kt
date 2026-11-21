@@ -10,6 +10,7 @@ import com.github.avbox.osc.player.core.PlayState
 import com.github.avbox.osc.player.effect.PictureEffectUnavailableReason
 import com.github.avbox.osc.player.effect.PicturePreset
 import com.github.avbox.osc.player.effect.PictureProfile
+import com.github.avbox.osc.player.effect.anime4k.Anime4kMode
 
 class PlayerUiState {
 
@@ -31,6 +32,8 @@ class PlayerUiState {
     var dragging: Boolean by mutableStateOf(false)
         private set
     var seekPreviewPositionMs: Long by mutableStateOf(0L)
+        private set
+    var comparing: Boolean by mutableStateOf(false)
         private set
 
     var seekHintVisible: Boolean by mutableStateOf(false)
@@ -281,6 +284,10 @@ class PlayerUiState {
 
     fun updateDragging(value: Boolean) {
         dragging = value
+    }
+
+    fun updateComparing(value: Boolean) {
+        comparing = value
     }
 
     fun updateLockState(value: LockVisibility) {
@@ -544,9 +551,12 @@ class PictureParamsState(
     val anime4kUnavailable: Boolean,
     val anime4kSharpen: Float,
     val anime4kDeblur: Boolean,
+    val anime4kMode: Anime4kMode = Anime4kMode.Anime,
+    val comparing: Boolean = false,
     val onAnime4kToggled: (Boolean) -> Unit,
     val onAnime4kSharpenChanged: (Float) -> Unit,
     val onAnime4kDeblurToggled: (Boolean) -> Unit,
+    val onAnime4kModeChanged: (Anime4kMode) -> Unit = {},
     val onPresetSelected: (PicturePreset) -> Unit,
     val onTuningChanged: (PictureProfile) -> Unit,
     val onReset: () -> Unit,

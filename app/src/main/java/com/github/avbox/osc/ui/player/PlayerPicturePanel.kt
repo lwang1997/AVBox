@@ -13,7 +13,6 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Slider
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -26,6 +25,7 @@ import com.github.avbox.osc.R
 import com.github.avbox.osc.player.effect.PictureEffectUnavailableReason
 import com.github.avbox.osc.player.effect.PicturePreset
 import com.github.avbox.osc.player.effect.PictureProfile
+import com.github.avbox.osc.player.effect.anime4k.Anime4kMode
 import com.github.avbox.osc.player.state.PictureParamsState
 import java.util.Locale
 
@@ -33,9 +33,7 @@ import java.util.Locale
 @Composable
 internal fun PictureParams(state: PictureParamsState) {
     var tuning by remember(state) { mutableStateOf(state.tuning) }
-    DisposableEffect(Unit) {
-        onDispose { state.onCompareChanged(false) }
-    }
+    var comparing by remember(state) { mutableStateOf(state.comparing) }
     Column(Modifier.fillMaxWidth()) {
         state.unavailableReason.hintRes()?.let { hintRes ->
             Text(
@@ -88,6 +86,21 @@ internal fun PictureParams(state: PictureParamsState) {
             }
         }
         if (state.anime4kEnabled) {
+            Spacer(Modifier.height(playerDim(R.dimen.vs_10)))
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(playerDim(R.dimen.vs_10)),
+            ) {
+                Anime4kMode.entries.forEach { mode ->
+                    SheetButton(
+                        text = stringResource(mode.labelRes),
+                        selected = state.anime4kMode == mode,
+                        onClick = { state.onAnime4kModeChanged(mode) },
+                        contentPadding = playerDim(R.dimen.vs_20),
+                        modifier = Modifier.weight(1f),
+                    )
+                }
+            }
             var sharpen by remember(state) { mutableStateOf(state.anime4kSharpen) }
             PictureSlider(R.string.player_anime4k_sharpen, sharpen, 0f..1f, "%.2f") {
                 sharpen = it
@@ -186,12 +199,28 @@ internal fun PictureParams(state: PictureParamsState) {
             Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(playerDim(R.dimen.vs_10)),
         ) {
-            HoldCompareButton(state, Modifier.weight(1f))
+            CompareButton(state, comparing, { comparing = it }, Modifier.weight(1f))
             SheetActionButton(
                 text = stringResource(R.string.player_picture_reset),
                 onClick = state.onReset,
                 iconRes = R.drawable.player_ic_params_reset,
                 modifier = Modifier.weight(1f),
+            )
+        }
+        val compareHintRes = when {
+            comparing -> R.string.player_picture_compare_hint
+            !state.anime4kEnabled && state.preset == PicturePreset.Original ->
+                R.string.player_picture_compare_empty
+            else -> null
+        }
+        compareHintRes?.let { hintRes ->
+            Spacer(Modifier.height(playerDim(R.dimen.vs_10)))
+            Text(
+                text = stringResource(hintRes),
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                fontSize = playerTextSize(R.dimen.ts_18),
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth(),
             )
         }
     }
@@ -216,16 +245,20 @@ private fun PictureSlider(
 }
 
 @Composable
-private fun HoldCompareButton(state: PictureParamsState, modifier: Modifier = Modifier) {
-    var pressed by remember { mutableStateOf(false) }
+private fun CompareButton(
+    state: PictureParamsState,
+    comparing: Boolean,
+    onComparingChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+) {
     SheetButton(
         text = stringResource(R.string.player_picture_compare),
-        onClick = {},
-        selected = pressed,
-        onPressChange = {
-            pressed = it
-            state.onCompareChanged(it)
+        onClick = {
+            val next = !comparing
+            onComparingChange(next)
+            state.onCompareChanged(next)
         },
+        selected = comparing,
         iconRes = R.drawable.player_ic_params_compare,
         modifier = modifier,
     )

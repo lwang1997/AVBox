@@ -92,18 +92,26 @@ internal class PlayerConfigDelegate(private val host: VideoPlayerController) {
                 tuning = PictureEffects.custom,
                 unavailableReason = PictureEffects.unavailableReason(),
                 anime4kTierText = host.context.getString(Anime4kTier.byName(PlaybackSettingsState.config.anime4kTier).labelRes),
-                anime4kEnabled = PlaybackSettingsState.config.anime4kEnabled,
+                anime4kEnabled = PictureEffects.anime4kActive(),
                 anime4kUnavailable = PictureEffects.anime4kUnavailable(),
                 anime4kSharpen = Anime4kSettings.sharpen(),
                 anime4kDeblur = PlaybackSettingsState.config.anime4kDeblur,
-                onAnime4kToggled = {
-                    PlaybackSettingsState.anime4kEnabled = it
+                anime4kMode = PictureEffects.anime4kMode(),
+                comparing = PictureEffects.comparing(),
+                onAnime4kToggled = { enabled ->
+                    PlaybackSettingsState.anime4kEnabled = enabled
+                    PictureEffects.setAnime4kSessionDisabled(!enabled)
                     restartForPictureIfNeeded()
                     refreshParamsSheet()
                 },
                 onAnime4kSharpenChanged = { PictureEffects.setAnime4kSharpen(it) },
                 onAnime4kDeblurToggled = {
                     PlaybackSettingsState.anime4kDeblur = it
+                    restartForPictureIfNeeded()
+                    refreshParamsSheet()
+                },
+                onAnime4kModeChanged = {
+                    PictureEffects.setAnime4kMode(it)
                     restartForPictureIfNeeded()
                     refreshParamsSheet()
                 },
@@ -123,6 +131,7 @@ internal class PlayerConfigDelegate(private val host: VideoPlayerController) {
                 },
                 onCompareChanged = {
                     PictureEffects.compare(it)
+                    host.state.updateComparing(it)
                     restartForPictureIfNeeded()
                 },
             ),

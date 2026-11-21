@@ -5,6 +5,7 @@ import com.github.avbox.osc.api.ApiConfig
 import com.github.avbox.osc.bean.ParseBean
 import com.github.avbox.osc.data.WatchProgressStore
 import com.github.avbox.osc.player.controller.VodControlListener
+import com.github.avbox.osc.player.effect.PictureEffects
 import com.github.avbox.osc.player.state.DanmuSettingSheetState
 import com.github.avbox.osc.util.DanmuSettingsState
 import com.github.avbox.osc.util.AppLog
@@ -110,6 +111,7 @@ class PlayContainerControlListener(private val container: PlayContainer) : VodCo
     }
 
     override fun prepared() {
+        container.uiState().updateComparing(PictureEffects.comparing())
         container.initSubtitleView()
         container.kernelView?.prepared()
         container.startDanmuIfReady()

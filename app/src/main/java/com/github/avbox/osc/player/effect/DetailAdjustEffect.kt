@@ -10,6 +10,9 @@ internal class DetailAdjustEffect : GlEffect {
     @Volatile
     var profile: PictureProfile = PictureProfile.OFF
 
+    @Volatile
+    var compareSplit: Boolean = false
+
     override fun toGlShaderProgram(context: Context, useHdr: Boolean): GlShaderProgram =
         DetailAdjustShaderProgram(useHdr, this)
 
@@ -31,6 +34,7 @@ private class DetailAdjustShaderProgram(
         glProgram.setFloatUniform("uSharpness", profile.sharpness)
         glProgram.setFloatUniform("uThreshold", profile.threshold)
         glProgram.setFloatUniform("uShadowLift", profile.shadowLift)
+        glProgram.setFloatUniform("uCompareSplit", if (effect.compareSplit) 1f else 0f)
     }
 
     private companion object {
@@ -41,12 +45,23 @@ private class DetailAdjustShaderProgram(
             uniform float uSharpness;
             uniform float uThreshold;
             uniform float uShadowLift;
+            uniform float uCompareSplit;
             varying vec2 vTexSamplingCoord;
             const vec3 LUMA = vec3(0.2126, 0.7152, 0.0722);
             const float SHADOW_START = 0.08;
             const float SHADOW_END = 0.55;
             void main() {
               vec4 center = texture2D(uTexSampler, vTexSamplingCoord);
+              if (uCompareSplit > 0.5) {
+                if (abs(vTexSamplingCoord.x - 0.5) < 0.0015) {
+                  gl_FragColor = vec4(1.0);
+                  return;
+                }
+                if (vTexSamplingCoord.x < 0.5) {
+                  gl_FragColor = center;
+                  return;
+                }
+              }
               vec3 color = center.rgb;
               if (uSharpness > 0.0) {
                 vec3 left = texture2D(uTexSampler, vTexSamplingCoord + vec2(-uTexelSize.x, 0.0)).rgb;

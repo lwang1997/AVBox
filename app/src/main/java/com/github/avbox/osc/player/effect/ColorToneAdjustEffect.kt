@@ -7,6 +7,9 @@ import androidx.media3.effect.GlShaderProgram
 internal class ColorToneAdjustEffect : GlEffect {
 
     @Volatile
+    var compareSplit: Boolean = false
+
+    @Volatile
     var parameters: Parameters = Parameters(PictureProfile.OFF, colorMatrixOf(PictureProfile.OFF))
         private set
 
@@ -68,6 +71,7 @@ private class ColorToneAdjustShaderProgram(
         glProgram.setFloatsUniform("uColorMatrix", parameters.colorMatrix)
         glProgram.setFloatUniform("uGamma", parameters.gamma)
         glProgram.setFloatUniform("uHue", parameters.hue)
+        glProgram.setFloatUniform("uCompareSplit", if (effect.compareSplit) 1f else 0f)
     }
 
     private companion object {
@@ -77,6 +81,7 @@ private class ColorToneAdjustShaderProgram(
             uniform mat4 uColorMatrix;
             uniform float uGamma;
             uniform float uHue;
+            uniform float uCompareSplit;
             varying vec2 vTexSamplingCoord;
             vec3 rotateHue(vec3 color, float hue) {
               float angle = radians(hue);
@@ -91,6 +96,16 @@ private class ColorToneAdjustShaderProgram(
             }
             void main() {
               vec4 sample = texture2D(uTexSampler, vTexSamplingCoord);
+              if (uCompareSplit > 0.5) {
+                if (abs(vTexSamplingCoord.x - 0.5) < 0.0015) {
+                  gl_FragColor = vec4(1.0);
+                  return;
+                }
+                if (vTexSamplingCoord.x < 0.5) {
+                  gl_FragColor = sample;
+                  return;
+                }
+              }
               vec3 color = clamp((uColorMatrix * vec4(sample.rgb, 1.0)).rgb, 0.0, 1.0);
               if (abs(uGamma - 1.0) > 0.0001) color = pow(color, vec3(1.0 / max(uGamma, 0.0001)));
               if (abs(uHue) > 0.0001) color = rotateHue(color, uHue);

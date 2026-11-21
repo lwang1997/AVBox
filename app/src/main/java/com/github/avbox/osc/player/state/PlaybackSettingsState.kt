@@ -3,6 +3,8 @@ package com.github.avbox.osc.player.state
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import com.github.avbox.osc.player.effect.anime4k.Anime4kMode
+import com.github.avbox.osc.player.effect.anime4k.Anime4kSettings
 import com.github.avbox.osc.player.effect.anime4k.Anime4kTier
 import com.github.avbox.osc.util.KVKeys
 import com.github.avbox.osc.util.KV
@@ -13,6 +15,9 @@ data class PlaybackSettingsConfig(
     val playScale: Int,
     val exoDecode: String,
     val anime4kTier: String,
+    val anime4kMode: String,
+    val anime4kAuto: Boolean,
+    val anime4kAutoMaxWidth: Int,
     val kernelPrewarm: Boolean,
     val playTunnel: Boolean,
     val preferAac: Boolean,
@@ -41,6 +46,9 @@ object PlaybackSettingsState {
         playScale = KV.get(KVKeys.PLAY_SCALE, 0),
         exoDecode = KV.get(KVKeys.EXO_DECODE, "硬解码"), // i18n: keep
         anime4kTier = Anime4kTier.byName(KV.get(KVKeys.ANIME4K_TIER, Anime4kTier.default.name)).name,
+        anime4kMode = Anime4kMode.byName(KV.get(KVKeys.ANIME4K_MODE, Anime4kMode.default.name)).name,
+        anime4kAuto = KV.get(KVKeys.ANIME4K_AUTO, false),
+        anime4kAutoMaxWidth = KV.get(KVKeys.ANIME4K_AUTO_MAX_WIDTH, Anime4kSettings.DEFAULT_AUTO_MAX_WIDTH),
         kernelPrewarm = KV.get(KVKeys.KERNEL_PREWARM, KVKeys.KERNEL_PREWARM_DEFAULT),
         playTunnel = KV.get(KVKeys.PLAY_TUNNEL, false),
         preferAac = KV.get(KVKeys.PLAY_PREFER_AAC, false),
@@ -90,6 +98,27 @@ object PlaybackSettingsState {
         set(value) {
             KV.put(KVKeys.ANIME4K_TIER, value)
             current = current.copy(anime4kTier = value)
+        }
+
+    var anime4kMode: String
+        get() = current.anime4kMode
+        set(value) {
+            KV.put(KVKeys.ANIME4K_MODE, value)
+            current = current.copy(anime4kMode = value)
+        }
+
+    var anime4kAuto: Boolean
+        get() = current.anime4kAuto
+        set(value) {
+            KV.put(KVKeys.ANIME4K_AUTO, value)
+            current = current.copy(anime4kAuto = value)
+        }
+
+    var anime4kAutoMaxWidth: Int
+        get() = current.anime4kAutoMaxWidth
+        set(value) {
+            KV.put(KVKeys.ANIME4K_AUTO_MAX_WIDTH, value)
+            current = current.copy(anime4kAutoMaxWidth = value)
         }
 
     var kernelPrewarm: Boolean

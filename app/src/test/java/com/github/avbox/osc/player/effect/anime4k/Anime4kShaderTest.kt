@@ -521,11 +521,13 @@ class Anime4kShaderTest {
             .firstOrNull { it.isDirectory }
         assumeTrue("未找到 assets 目录,跳过", root != null)
         Anime4kTier.entries.forEach { tier ->
-            tier.assets.forEach { name ->
-                assertTrue(
-                    "${tier.name} 运行时读不到 $name",
-                    File(root, ANIME4K_ASSET_DIR + name).isFile,
-                )
+            Anime4kMode.entries.forEach { mode ->
+                tier.assetsFor(mode).forEach { name ->
+                    assertTrue(
+                        "${tier.name}/${mode.name} 运行时读不到 $name",
+                        File(root, ANIME4K_ASSET_DIR + name).isFile,
+                    )
+                }
             }
         }
     }

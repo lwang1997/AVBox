@@ -9,29 +9,42 @@ import androidx.media3.common.util.Size
 import androidx.media3.effect.BaseGlShaderProgram
 import com.github.avbox.osc.player.core.EffectCanvas
 import com.github.avbox.osc.util.AppLog
+import kotlin.math.max
 
 internal class Anime4kChainProgram(
     private val context: Context,
-    private val tier: Anime4kTier?,
-    hdr: Boolean,
-) : BaseGlShaderProgram(hdr, if (hdr) 1 else 3) {
+    private val effect: Anime4kEffect,
+    private val hdrEnabled: Boolean,
+) : BaseGlShaderProgram(hdrEnabled, if (hdrEnabled) 1 else 3) {
 
     private val passes = ArrayList<CompiledPass>()
     private val targets = ArrayList<Target>()
     private var copyProgram: GlProgram? = null
+    private var splitProgram: GlProgram? = null
+    private var splitTarget: Target? = null
     private var outputWidth = 0
     private var outputHeight = 0
-    private var failed = hdr || tier == null
+    private var effectiveTier: Anime4kTier? = null
+    private var failed = hdrEnabled
     private var firstFrameLogged = false
+    private var splitLogged = false
 
     override fun configure(inputWidth: Int, inputHeight: Int): Size {
         releaseGl()
         firstFrameLogged = false
+        splitLogged = false
         outputWidth = inputWidth
         outputHeight = inputHeight
-        if (!failed) {
+        val tier = resolveTier(inputWidth, inputHeight)
+        effectiveTier = tier
+        failed = hdrEnabled || tier == null
+        Anime4kStatus.onChainResolved(
+            tierActive = tier != null,
+            autoActive = tier != null && !effect.manualEnabled,
+        )
+        if (!failed && tier != null) {
             try {
-                build(requireNotNull(tier), inputWidth, inputHeight)
+                build(tier, effect.mode, inputWidth, inputHeight)
                 Anime4kStatus.onBuildSucceeded()
             } catch (e: Exception) {
                 failed = true
@@ -49,12 +62,28 @@ internal class Anime4kChainProgram(
         return Size(outputWidth, outputHeight)
     }
 
+    private fun resolveTier(inputWidth: Int, inputHeight: Int): Anime4kTier? {
+        val desired = effect.tier ?: return null
+        if (effect.manualEnabled) return desired
+        val limit = effect.autoMaxWidth
+        if (limit > 0 && max(inputWidth, inputHeight) <= limit) return desired
+        return null
+    }
+
     override fun drawFrame(inputTexId: Int, presentationTimeUs: Long) {
         try {
-            if (failed || Anime4kStatus.bypass()) {
+            if (failed || Anime4kStatus.sessionDisabled) {
                 drawCopy(inputTexId)
                 logFirstFrame()
                 return
+            }
+            val compare = effect.compareSplit
+            if (compare && !splitLogged) {
+                splitLogged = true
+                AppLog.i(
+                    "echo-anime4k split: inTex=$inputTexId out=${outputWidth}x$outputHeight" +
+                        " passes=${passes.size}",
+                )
             }
             val previousFramebuffer = IntArray(1)
             val previousViewport = IntArray(4)
@@ -62,7 +91,11 @@ internal class Anime4kChainProgram(
             GLES20.glGetIntegerv(GLES20.GL_VIEWPORT, previousViewport, 0)
             passes.forEachIndexed { index, compiled ->
                 try {
-                    if (compiled.writesScreen) {
+                    if (compare && index == passes.lastIndex) {
+                        val target = ensureSplitTarget()
+                        GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, target.framebuffer)
+                        GLES20.glViewport(0, 0, target.width, target.height)
+                    } else if (compiled.writesScreen) {
                         GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, previousFramebuffer[0])
                         GLES20.glViewport(
                             previousViewport[0],
@@ -107,6 +140,9 @@ internal class Anime4kChainProgram(
                     throw e
                 }
             }
+            if (compare) {
+                drawSplitComposite(inputTexId, previousFramebuffer[0], previousViewport)
+            }
             logFirstFrame()
         } catch (e: GlUtil.GlException) {
             throw VideoFrameProcessingException(e, presentationTimeUs)
@@ -118,15 +154,15 @@ internal class Anime4kChainProgram(
         releaseGl()
     }
 
-    private fun build(tier: Anime4kTier, inputWidth: Int, inputHeight: Int) {
+    private fun build(tier: Anime4kTier, mode: Anime4kMode, inputWidth: Int, inputHeight: Int) {
         fun load(asset: String): List<Anime4kPass> = Anime4kShader.parse(
             context.assets.open(ANIME4K_ASSET_DIR + asset).bufferedReader().use { it.readText() },
         )
 
         val canvas = EffectCanvas.get()
         val clamp = load(ANIME4K_CLAMP_HIGHLIGHTS)
-        val restore = tier.restore?.let { load(it) }.orEmpty()
-        val upscale = tier.upscale?.let { load(it) }.orEmpty()
+        val restore = tier.restore(mode)?.let { load(it) }.orEmpty()
+        val upscale = tier.upscale(mode)?.let { load(it) }.orEmpty()
         val deblur = load(ANIME4K_DEBLUR_DOG)
         val deblurOn = Anime4kSettings.deblur()
         val composed = Anime4kShader.compose(restore, upscale, deblur, clamp, inputWidth, canvas, deblurOn)
@@ -171,7 +207,7 @@ internal class Anime4kChainProgram(
         outputWidth = last.width
         outputHeight = last.height
         AppLog.i(
-            "echo-anime4k chain: tier=${tier.name} passes=${passes.size}" +
+            "echo-anime4k chain: tier=${tier.name} mode=${mode.name} passes=${passes.size}" +
                 " in=${inputWidth}x$inputHeight out=${outputWidth}x$outputHeight" +
                 " canvas=${canvas?.get(0)}x${canvas?.get(1)}" +
                 " clamp=${clamp.size} restore=${restore.size}" +
@@ -184,7 +220,7 @@ internal class Anime4kChainProgram(
         if (firstFrameLogged) return
         firstFrameLogged = true
         AppLog.i(
-            "echo-anime4k draw: tier=${tier?.name ?: "off"} passes=${passes.size}" +
+            "echo-anime4k draw: tier=${effectiveTier?.name ?: "off"} passes=${passes.size}" +
                 " out=${outputWidth}x$outputHeight" + if (failed) " (passthrough)" else "",
         )
     }
@@ -194,6 +230,18 @@ internal class Anime4kChainProgram(
         val target = Target(texture, createFramebuffer(texture), width, height)
         targets.add(target)
         return target
+    }
+
+    private fun ensureSplitTarget(): Target {
+        val existing = splitTarget
+        if (existing != null && existing.width == outputWidth && existing.height == outputHeight) {
+            return existing
+        }
+        if (existing != null) {
+            targets.remove(existing)
+            releaseTarget(existing)
+        }
+        return newTarget(outputWidth, outputHeight).also { splitTarget = it }
     }
 
     private fun drawCopy(inputTexId: Int) {
@@ -207,6 +255,25 @@ internal class Anime4kChainProgram(
         }
         program.use()
         program.setSamplerTexIdUniform("uTexSampler", inputTexId, 0)
+        program.bindAttributesAndUniforms()
+        GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4)
+    }
+
+    private fun drawSplitComposite(inputTexId: Int, framebuffer: Int, viewport: IntArray) {
+        val target = splitTarget ?: return
+        val program = splitProgram ?: GlProgram(VERTEX_SHADER, SPLIT_SHADER).also {
+            it.setBufferAttribute(
+                "aFramePosition",
+                GlUtil.getNormalizedCoordinateBounds(),
+                GlUtil.HOMOGENEOUS_COORDINATE_VECTOR_SIZE,
+            )
+            splitProgram = it
+        }
+        GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, framebuffer)
+        GLES20.glViewport(viewport[0], viewport[1], viewport[2], viewport[3])
+        program.use()
+        program.setSamplerTexIdUniform("uProcessed", target.texture, 0)
+        program.setSamplerTexIdUniform("uOriginal", inputTexId, 1)
         program.bindAttributesAndUniforms()
         GLES20.glDrawArrays(GLES20.GL_TRIANGLE_STRIP, 0, 4)
     }
@@ -230,28 +297,33 @@ internal class Anime4kChainProgram(
         GLES20.glDeleteFramebuffers(1, intArrayOf(id), 0)
     }
 
-    private fun releaseTargets() {
-        targets.forEach { target ->
-            try {
-                GlUtil.deleteTexture(target.texture)
-            } catch (e: GlUtil.GlException) {
-                AppLog.e("Anime4kChain", "delete target texture failed", e)
-            }
-            deleteFramebuffer(target.framebuffer)
+    private fun releaseTarget(target: Target) {
+        try {
+            GlUtil.deleteTexture(target.texture)
+        } catch (e: GlUtil.GlException) {
+            AppLog.e("Anime4kChain", "delete target texture failed", e)
         }
+        deleteFramebuffer(target.framebuffer)
+    }
+
+    private fun releaseTargets() {
+        targets.forEach { releaseTarget(it) }
         targets.clear()
+        splitTarget = null
     }
 
     private fun releaseGl() {
         try {
             passes.forEach { it.program.delete() }
             copyProgram?.delete()
+            splitProgram?.delete()
         } catch (e: GlUtil.GlException) {
             AppLog.e("Anime4kChain", "release programs failed", e)
         }
         passes.clear()
         releaseTargets()
         copyProgram = null
+        splitProgram = null
     }
 
     private class Target(val texture: Int, val framebuffer: Int, val width: Int, val height: Int)
@@ -292,6 +364,22 @@ internal class Anime4kChainProgram(
             varying vec2 vTexCoord;
             void main() {
               gl_FragColor = texture2D(uTexSampler, vTexCoord);
+            }
+            """
+
+        const val SPLIT_SHADER = """
+            precision mediump float;
+            uniform sampler2D uProcessed;
+            uniform sampler2D uOriginal;
+            varying vec2 vTexCoord;
+            void main() {
+              if (abs(vTexCoord.x - 0.5) < 0.0015) {
+                gl_FragColor = vec4(1.0);
+              } else if (vTexCoord.x < 0.5) {
+                gl_FragColor = texture2D(uOriginal, vTexCoord);
+              } else {
+                gl_FragColor = texture2D(uProcessed, vTexCoord);
+              }
             }
             """
     }

@@ -26,6 +26,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalConfiguration
 import androidx.compose.ui.platform.LocalWindowInfo
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
@@ -102,6 +103,21 @@ fun PlayerOverlay(
             PlayerInfoOsd(state, actions, maxWidth)
         }
         PlayerSpeedBoostHint(state)
+
+        if (state.comparing) {
+            CompareBadge(
+                text = stringResource(R.string.player_picture_compare_left),
+                modifier = Modifier
+                    .align(Alignment.TopStart)
+                    .padding(start = playerEdgePadding(), top = playerDim(R.dimen.vs_12)),
+            )
+            CompareBadge(
+                text = stringResource(R.string.player_picture_compare_right),
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(end = playerEdgePadding(), top = playerDim(R.dimen.vs_12)),
+            )
+        }
 
         state.selectDialog?.let { dialogState ->
             PlayerSelectDialog(
@@ -205,6 +221,22 @@ internal fun playerTextSize(@DimenRes id: Int): TextUnit {
 @Composable
 internal fun playerEdgePadding(): Dp =
     if (LocalConfiguration.current.screenWidthDp >= 600) 48.dp else 16.dp
+
+@Composable
+private fun CompareBadge(text: String, modifier: Modifier = Modifier) {
+    Text(
+        text = text,
+        color = Color.White,
+        fontSize = playerTextSize(R.dimen.ts_18),
+        fontWeight = FontWeight.Medium,
+        modifier = modifier
+            .background(
+                Color.Black.copy(alpha = 0.55f),
+                RoundedCornerShape(playerDim(R.dimen.vs_5)),
+            )
+            .padding(horizontal = playerDim(R.dimen.vs_10), vertical = playerDim(R.dimen.vs_5)),
+    )
+}
 
 @Composable
 internal fun PlayerMenuButton(

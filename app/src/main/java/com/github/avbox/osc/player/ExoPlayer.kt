@@ -95,6 +95,7 @@ class ExoPlayer(context: Context) : KernelPlayer(), PictureEffectHost {
 
     override fun setDataSource(path: String, headers: Map<String, String>?) {
         stateMachine.onContentReplaced()
+        PictureEffects.onContentReplaced(path)
         engine?.setDataSource(path, headers, KV.get(KVKeys.PLAYER_IS_LIVE, false))
     }
 

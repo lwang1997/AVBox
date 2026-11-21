@@ -172,6 +172,8 @@
     <string name="player_anime4k_unavailable">当前档位在本机不可用，本次播放已自动跳过</string>
     <string name="player_anime4k_sharpen">增强锐度</string>
     <string name="player_anime4k_deblur">去模糊</string>
+    <string name="player_anime4k_mode_anime">动漫</string>
+    <string name="player_anime4k_mode_real_movie">真人电影</string>
     <string name="player_picture_preset_natural">自然</string>
     <string name="player_picture_preset_vivid">艳丽</string>
     <string name="player_picture_preset_clear">清晰</string>
@@ -193,7 +195,11 @@
     <string name="player_picture_temperature">色温</string>
     <string name="player_picture_sharpness">锐度</string>
     <string name="player_picture_shadow">暗部提升</string>
-    <string name="player_picture_compare">按住对比</string>
+    <string name="player_picture_compare">分屏对比</string>
+    <string name="player_picture_compare_hint">左：原画  右：增强</string>
+    <string name="player_picture_compare_left">原画</string>
+    <string name="player_picture_compare_right">增强</string>
+    <string name="player_picture_compare_empty">当前没有已启用的画质效果，分屏对比看不出差异</string>
     <string name="player_picture_reset">恢复默认</string>
     <string name="player_picture_unavailable_tunnel">隧道模式起播，画面参数本集不生效；关闭隧道并重新起播后生效</string>
     <string name="player_picture_unavailable_hdr">HDR 片源不支持画面参数，当前按原样输出</string>
@@ -399,6 +405,9 @@
     <string name="settings_play_scale">画面缩放</string>
     <string name="settings_play_decode">解码方式</string>
     <string name="settings_play_anime4k">Anime4K 画质增强</string>
+    <string name="settings_play_anime4k_mode">Anime4K 默认模式</string>
+    <string name="settings_play_anime4k_auto">低分辨率自动开启</string>
+    <string name="settings_play_anime4k_auto_threshold">自动开启上限</string>
     <string name="settings_play_tunnel">隧道模式</string>
     <string name="settings_play_kernel_prewarm">内核预热</string>
     <string name="settings_play_kernel_prewarm_subtitle">启动后提前创建并常驻，加快起播</string>

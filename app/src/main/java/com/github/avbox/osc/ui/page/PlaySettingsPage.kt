@@ -23,6 +23,7 @@ import com.github.avbox.osc.R
 import com.github.avbox.osc.player.BasePlayerView
 import com.github.avbox.osc.player.PlaybackService
 import com.github.avbox.osc.player.controller.PlayerTextFormat
+import com.github.avbox.osc.player.effect.anime4k.Anime4kMode
 import com.github.avbox.osc.player.effect.anime4k.Anime4kTier
 import com.github.avbox.osc.player.state.PlaybackSettingsState
 import com.github.avbox.osc.player.thirdparty.PlayerCatalog
@@ -42,6 +43,16 @@ import kotlin.math.roundToInt
 
 private const val DecodeHard = "硬解码" // i18n: keep
 private const val DecodeSoft = "软解码" // i18n: keep
+
+private val Anime4kAutoWidths = intArrayOf(854, 960, 1280, 1920)
+
+private fun autoWidthLabel(width: Int): String = when (width) {
+    854 -> "480P"
+    960 -> "540P"
+    1280 -> "720P"
+    1920 -> "1080P"
+    else -> "$width"
+}
 
 @Composable
 fun PlaySettingsScreen(onNavigateBack: () -> Unit) {
@@ -138,7 +149,7 @@ fun PlaySettingsScreen(onNavigateBack: () -> Unit) {
                         onSelect = { idx -> PlaybackSettingsState.exoDecode = if (idx == 1) DecodeSoft else DecodeHard },
                     )
                 }
-                SettingsCard(SettingsCardPosition.LAST) {
+                SettingsCard(SettingsCardPosition.MIDDLE) {
                     val tiers = Anime4kTier.entries
                     val labels = tiers.map { stringResource(it.labelRes) }
                     val selected = tiers.indexOfFirst { it.name == config.anime4kTier }.coerceAtLeast(0)
@@ -150,6 +161,43 @@ fun PlaySettingsScreen(onNavigateBack: () -> Unit) {
                         options = labels,
                         selectedIndex = selected,
                         onSelect = { idx -> PlaybackSettingsState.anime4kTier = tiers[idx].name },
+                    )
+                }
+                SettingsCard(SettingsCardPosition.MIDDLE) {
+                    val modes = Anime4kMode.entries
+                    val labels = modes.map { stringResource(it.labelRes) }
+                    val selected = modes.indexOfFirst { it.name == config.anime4kMode }.coerceAtLeast(0)
+                    SettingsOptionMenuRow(
+                        title = stringResource(R.string.settings_play_anime4k_mode),
+                        leadingIconRes = R.drawable.ic_play_anime4k,
+                        valueText = labels[selected],
+                        enabled = currentPlayType == 2,
+                        options = labels,
+                        selectedIndex = selected,
+                        onSelect = { idx -> PlaybackSettingsState.anime4kMode = modes[idx].name },
+                    )
+                }
+                SettingsCard(SettingsCardPosition.MIDDLE) {
+                    SettingsSwitchRow(
+                        title = stringResource(R.string.settings_play_anime4k_auto),
+                        leadingIconRes = R.drawable.ic_brightness_auto,
+                        checked = config.anime4kAuto,
+                        enabled = currentPlayType == 2,
+                        onCheckedChange = { PlaybackSettingsState.anime4kAuto = it },
+                    )
+                }
+                SettingsCard(SettingsCardPosition.LAST) {
+                    val widthIndex = Anime4kAutoWidths
+                        .indexOf(config.anime4kAutoMaxWidth)
+                        .coerceAtLeast(0)
+                    SettingsOptionMenuRow(
+                        title = stringResource(R.string.settings_play_anime4k_auto_threshold),
+                        leadingIconRes = R.drawable.ic_cache_size,
+                        valueText = autoWidthLabel(config.anime4kAutoMaxWidth),
+                        enabled = currentPlayType == 2 && config.anime4kAuto,
+                        options = Anime4kAutoWidths.map { autoWidthLabel(it) },
+                        selectedIndex = widthIndex,
+                        onSelect = { idx -> PlaybackSettingsState.anime4kAutoMaxWidth = Anime4kAutoWidths[idx] },
                     )
                 }
             }

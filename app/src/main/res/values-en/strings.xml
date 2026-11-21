@@ -172,6 +172,8 @@
     <string name="player_anime4k_unavailable">This level is unavailable on this device - skipped this time</string>
     <string name="player_anime4k_sharpen">Enhance sharpness</string>
     <string name="player_anime4k_deblur">Deblur</string>
+    <string name="player_anime4k_mode_anime">Anime</string>
+    <string name="player_anime4k_mode_real_movie">Live action</string>
     <string name="player_picture_preset_natural">Natural</string>
     <string name="player_picture_preset_vivid">Vivid</string>
     <string name="player_picture_preset_clear">Clear</string>
@@ -193,7 +195,11 @@
     <string name="player_picture_temperature">Temperature</string>
     <string name="player_picture_sharpness">Sharpness</string>
     <string name="player_picture_shadow">Shadow lift</string>
-    <string name="player_picture_compare">Hold to compare</string>
+    <string name="player_picture_compare">Split compare</string>
+    <string name="player_picture_compare_hint">Left: original  Right: enhanced</string>
+    <string name="player_picture_compare_left">Original</string>
+    <string name="player_picture_compare_right">Enhanced</string>
+    <string name="player_picture_compare_empty">No picture effect is enabled; split compare will look identical</string>
     <string name="player_picture_reset">Reset</string>
     <string name="player_picture_unavailable_tunnel">Started in tunneling mode: picture adjustment is off until playback restarts without tunneling</string>
     <string name="player_picture_unavailable_hdr">Picture adjustment is unavailable for HDR sources</string>
@@ -399,6 +405,9 @@
     <string name="settings_play_scale">Video Scaling</string>
     <string name="settings_play_decode">Decoding Mode</string>
     <string name="settings_play_anime4k">Anime4K Enhancement</string>
+    <string name="settings_play_anime4k_mode">Anime4K default mode</string>
+    <string name="settings_play_anime4k_auto">Auto enable for low resolution</string>
+    <string name="settings_play_anime4k_auto_threshold">Auto enable limit</string>
     <string name="settings_play_tunnel">Tunnel Mode</string>
     <string name="settings_play_kernel_prewarm">Player Engine Prewarm</string>
     <string name="settings_play_kernel_prewarm_subtitle">Pre-create the player engine and keep it resident for faster start-up</string>

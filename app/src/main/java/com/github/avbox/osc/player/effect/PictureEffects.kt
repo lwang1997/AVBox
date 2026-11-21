@@ -3,6 +3,7 @@ package com.github.avbox.osc.player.effect
 import androidx.media3.common.Effect
 import com.github.avbox.osc.player.core.RedrawPolicy
 import com.github.avbox.osc.player.effect.anime4k.Anime4kEffect
+import com.github.avbox.osc.player.effect.anime4k.Anime4kMode
 import com.github.avbox.osc.player.effect.anime4k.Anime4kSettings
 import com.github.avbox.osc.player.effect.anime4k.Anime4kStatus
 import com.github.avbox.osc.player.effect.anime4k.Anime4kTier
@@ -39,8 +40,8 @@ object PictureEffects {
     private val listWithoutAnime4k: List<Effect> = listOf(colorTone, detail)
     private val listWithAnime4k: List<Effect> = listOf(colorTone, detail, anime4k)
 
-    internal fun effectsFor(anime4kEnabled: Boolean): List<Effect> =
-        if (anime4kEnabled) listWithAnime4k else listWithoutAnime4k
+    internal fun effectsFor(anime4kEnabled: Boolean, autoAnime4kEnabled: Boolean = false): List<Effect> =
+        if (anime4kEnabled || autoAnime4kEnabled) listWithAnime4k else listWithoutAnime4k
 
     private var current: WeakReference<PictureEffectHost>? = null
 
@@ -52,12 +53,23 @@ object PictureEffects {
 
     private var anime4kOpened = false
     private var anime4kTierOpened: Anime4kTier = Anime4kTier.default
+    private var anime4kModeOpened: Anime4kMode = Anime4kMode.default
     private var anime4kDeblurOpened = false
+    private var sessionMode: Anime4kMode = Anime4kMode.default
+    private var sessionLoaded = false
+    private var contentKey: String? = null
 
     fun preset(): PicturePreset {
         val name = KV.get(KVKeys.PICTURE_PRESET, PicturePreset.Original.name)
         return PicturePreset.entries.firstOrNull { it.name == name } ?: PicturePreset.Original
     }
+
+    fun anime4kMode(): Anime4kMode = sessionMode
+
+    fun anime4kActive(): Boolean =
+        (Anime4kSettings.enabled() || Anime4kStatus.autoActive) && !Anime4kStatus.sessionDisabled
+
+    fun comparing(): Boolean = comparing
 
     var custom: PictureProfile
         get() = PictureProfile(
@@ -83,12 +95,12 @@ object PictureEffects {
         }
 
     fun applied(): PictureProfile {
-        if (comparing) return PictureProfile.OFF
         val preset = preset()
         return if (preset.adjustable) custom else PictureProfile.of(preset)
     }
 
-    private fun wanted(): Boolean = !applied().isNoOp || Anime4kSettings.enabled()
+    private fun wanted(): Boolean =
+        !applied().isNoOp || Anime4kSettings.enabled() || Anime4kSettings.autoEnabled()
 
     fun selectPreset(preset: PicturePreset) {
         KV.put(KVKeys.PICTURE_PRESET, preset.name)
@@ -100,16 +112,53 @@ object PictureEffects {
         custom = PictureProfile.OFF
     }
 
-    fun compare(original: Boolean) {
-        if (comparing == original) return
-        comparing = original
-        Anime4kStatus.bypassed = original
+    fun compare(split: Boolean) {
+        if (comparing == split) return
+        comparing = split
+        AppLog.i(
+            "echo-compare: split=$split opened=$openedThisSession" +
+                " anime4k=${anime4kActive()} preset=${preset().name}",
+        )
         push()
+    }
+
+    fun setAnime4kMode(mode: Anime4kMode) {
+        if (sessionMode == mode) return
+        sessionMode = mode
+        anime4k.mode = mode
+    }
+
+    fun setAnime4kSessionDisabled(disabled: Boolean) {
+        if (Anime4kStatus.sessionDisabled == disabled) return
+        Anime4kStatus.sessionDisabled = disabled
+        colorTone.compareSplit = comparing
+        detail.compareSplit = comparing
+        anime4k.compareSplit = comparing
+        val player = current?.get() ?: return
+        if (player.isPictureHdrSource()) return
+        if (RedrawPolicy.shouldRedrawOnParams(player.isPlaying, player.isPictureEffectsActive())) {
+            player.redrawVideoFrame()
+        }
+    }
+
+    fun onContentReplaced(url: String?) {
+        if (url == contentKey) return
+        contentKey = url
+        sessionMode = Anime4kSettings.defaultMode()
+        sessionLoaded = true
+        Anime4kStatus.resetSession()
+        comparing = false
+        colorTone.compareSplit = false
+        detail.compareSplit = false
+        anime4k.compareSplit = false
     }
 
     fun onPrepare(player: PictureEffectHost, tunnelingBlocked: Boolean) {
         comparing = false
-        Anime4kStatus.bypassed = false
+        Anime4kStatus.onPrepare()
+        colorTone.compareSplit = false
+        detail.compareSplit = false
+        anime4k.compareSplit = false
         if (KV.get(KVKeys.PLAYER_IS_LIVE, false)) {
             current = null
             AppLog.i("echo-picture-effects skip: live")
@@ -123,25 +172,37 @@ object PictureEffects {
         }
         val profile = applied()
         val tier = Anime4kTier.current()
-        val anime4kWanted = Anime4kSettings.enabled()
+        val manual = Anime4kSettings.enabled()
+        val auto = Anime4kSettings.autoEnabled()
+        val anime4kWanted = manual || auto
+        if (!sessionLoaded) {
+            sessionMode = Anime4kSettings.defaultMode()
+            sessionLoaded = true
+        }
+        anime4k.mode = sessionMode
+        anime4k.manualEnabled = manual
+        anime4k.autoMaxWidth = if (auto) Anime4kSettings.autoMaxWidth() else 0
         anime4k.tier = if (anime4kWanted) tier else null
         anime4kOpened = anime4kWanted
         anime4kTierOpened = tier
+        anime4kModeOpened = sessionMode
         anime4kDeblurOpened = Anime4kSettings.deblur()
         colorTone.setProfile(profile)
         detail.profile = profile
         val enabled = !profile.isNoOp || anime4kWanted
         openedThisSession = enabled
-        if (enabled) player.applyVideoEffects(effectsFor(anime4kWanted))
+        if (enabled) player.applyVideoEffects(effectsFor(manual, auto))
     }
 
     fun onPlayerReleased(player: PictureEffectHost) {
         if (current?.get() === player) current = null
+        contentKey = null
+        sessionLoaded = false
     }
 
     fun anime4kUnavailable(): Boolean {
         val player = current?.get() ?: return false
-        return Anime4kSettings.enabled() && !tunneling && !player.isPictureHdrSource() &&
+        return anime4kActive() && !tunneling && !player.isPictureHdrSource() &&
             Anime4kStatus.unavailable()
     }
 
@@ -168,10 +229,12 @@ object PictureEffects {
     fun consumeRestartNeeded(): Boolean {
         val player = current?.get() ?: return false
         if (tunneling || player.isPictureHdrSource()) return false
-        val anime4kWanted = Anime4kSettings.enabled()
+        val anime4kWanted = Anime4kSettings.enabled() || Anime4kSettings.autoEnabled()
         if (anime4kWanted != anime4kOpened) return true
         if (anime4kWanted && Anime4kTier.current() != anime4kTierOpened) return true
+        if (anime4kWanted && sessionMode != anime4kModeOpened) return true
         if (anime4kWanted && Anime4kSettings.deblur() != anime4kDeblurOpened) return true
+        if (Anime4kSettings.enabled() && !Anime4kStatus.tierActive) return true
         return restartNeeded(wanted(), openedThisSession, preset() == PicturePreset.Original)
     }
 
@@ -183,6 +246,9 @@ object PictureEffects {
         val profile = applied()
         colorTone.setProfile(profile)
         detail.profile = profile
+        colorTone.compareSplit = comparing
+        detail.compareSplit = comparing
+        anime4k.compareSplit = comparing
         if (tunneling) return
         if (player.isPictureHdrSource()) return
         if (openedThisSession) {
