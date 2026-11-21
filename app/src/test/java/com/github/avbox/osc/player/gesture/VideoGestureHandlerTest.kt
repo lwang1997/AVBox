@@ -395,8 +395,8 @@ class VideoGestureHandlerTest {
         val r = Recorder()
         val h = VideoGestureHandler(r)
         h.beginSession(session(), 300f, 300f)
-        assertFalse(h.onMove(300f, 340f, slop = 8f))
-        assertFalse(h.onMove(300f, 360f, slop = 8f))
+        assertFalse(h.onMove(300f, 310f, slop = 8f))
+        assertFalse(h.onMove(300f, 316f, slop = 8f))
         assertTrue("未越阈值不该改亮度", r.calls.none { it.startsWith("brightness") })
         assertTrue("未越阈值不该改音量", r.calls.none { it.startsWith("volume") })
     }
@@ -415,7 +415,7 @@ class VideoGestureHandlerTest {
         val r = Recorder()
         val h = VideoGestureHandler(r)
         h.beginSession(session(), 300f, 300f)
-        assertFalse(h.onMove(340f, 302f, slop = 8f))
+        assertFalse(h.onMove(310f, 302f, slop = 8f))
         assertTrue("小幅横移不该 seek,实际: ${r.calls}", r.calls.none { it.startsWith("seekPreview") })
     }
 
@@ -433,7 +433,7 @@ class VideoGestureHandlerTest {
         val r = Recorder()
         val h = VideoGestureHandler(r)
         h.beginSession(session(), 300f, 300f)
-        assertFalse(h.onMove(340f, 302f, slop = 8f))
+        assertFalse(h.onMove(310f, 302f, slop = 8f))
         assertTrue(h.onMove(500f, 302f, slop = 8f))
         assertTrue(r.calls.any { it.startsWith("seekPreview") })
     }

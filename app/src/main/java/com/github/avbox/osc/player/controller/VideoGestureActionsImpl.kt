@@ -33,7 +33,7 @@ internal class VideoGestureActionsImpl(private val host: VideoPlayerController) 
 
     private val slideFullWidthMs = 120000f
 
-    private val verticalRangePerScreen = 2.5f
+    private val verticalRangePerScreen = 1f
 
     private val topBandFraction = 0.15f
 

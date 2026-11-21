@@ -51,7 +51,7 @@ class VideoGestureHandler(
     val longPressTimeoutMs: Long = 500L,
     val doubleTapTimeoutMs: Long = 300L,
     val doubleTapMinTimeMs: Long = 40L,
-    private val commitFraction: Float = 0.10f,
+    private val commitFraction: Float = 0.03f,
 ) {
 
     enum class Mode { UNDECIDED, SEEK, BRIGHTNESS, VOLUME, NONE }

@@ -125,3 +125,5 @@ logs/
 .deepseek/
 .iso_forensics/
 .tools/
+# 本机构建指南（含机器本地路径，不入库）
+BUILD.local.md
