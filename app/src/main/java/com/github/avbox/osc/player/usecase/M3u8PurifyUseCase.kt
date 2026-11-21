@@ -111,13 +111,21 @@ class M3u8PurifyUseCase(context: Context, private val callback: Callback) {
 
     private suspend fun processM3u8Content(url: String, content: String, headers: HashMap<String, String>?) {
         val basePath = getBasePath(url)
+        // 净化开关已含去广告增强（规则 + 指纹探测），只在开关闭合时进入本管线
+        val segBefore = countSegments(content)
+        val working = withContext(Dispatchers.IO) {
+            AdContentProbe.dropAdSegments(content, url, headers)
+        }
+        val probeDropped = segBefore - countSegments(working)
+        if (probeDropped > 0) AppLog.i("echo-m3u8内容解析：指纹探测剔除 " + probeDropped + " 段")
         val (purified, adCount) = purifyLock.withLock {
             withContext(Dispatchers.IO) {
-                val result = M3u8.purify(basePath, content)
+                val result = M3u8.purify(basePath, working, true)
                 result to M3u8.currentAdCount
             }
         }
-        if (purified == null || adCount == 0) {
+        val totalAds = adCount + probeDropped
+        if (purified == null || totalAds == 0) {
             AppLog.i("echo-m3u8内容解析：未检测到广告")
             deliver { callback.startPlayUrl(url, headers) }
         } else {
@@ -127,8 +135,17 @@ class M3u8PurifyUseCase(context: Context, private val callback: Callback) {
                 callback.onM3u8ProxyUrl(proxyUrl, url)
                 callback.startPlayUrl(proxyUrl, headers)
             }
-            Toast.makeText(context, str(R.string.toast_ads_removed, adCount), Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, str(R.string.toast_ads_removed, totalAds), Toast.LENGTH_SHORT).show()
         }
+    }
+
+    private fun countSegments(content: String): Int {
+        var n = 0
+        for (line in RegexUtils.getPattern("\\r?\\n").split(content)) {
+            val t = line.trim { it <= ' ' }
+            if (t.isNotEmpty() && !t.startsWith("#")) n++
+        }
+        return n
     }
 
     private suspend fun fetchAndProcessForwardUrl(
@@ -150,8 +167,13 @@ class M3u8PurifyUseCase(context: Context, private val callback: Callback) {
     }
 
     private fun getBasePath(url: String): String {
-        val parts = RegexUtils.getPattern("/").split(url)
-        return parts[0] + "/"
+        // 取播放地址所在目录（含末尾 /）。旧实现 parts[0]+"/" 对 https://host/dir/x.m3u8
+        // 只会得到 "https:/"，相对路径分片会被解析成 https:/seg.ts → OkHttp 视 host 为 seg.ts → DNS 失败
+        val clean = url.substringBefore('?').substringBefore('#')
+        val idx = clean.lastIndexOf('/')
+        if (idx < 0) return "$clean/"
+        val dir = clean.substring(0, idx + 1)
+        return if (dir.endsWith("://")) "$clean/" else dir
     }
 
     private fun resolveForwardUrl(baseUrl: String, line: String): String {

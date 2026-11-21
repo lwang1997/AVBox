@@ -287,6 +287,9 @@ class PlaybackStarter(private val host: Host) {
             return
         }
         AppLog.i("echo-playM3u8:" + target)
+        // 直链投递走 2 参 playUrl，本轮不会刷新 playUrlGeneration，而 play() 已 nextGen()
+        // —— 进 m3u8 分支前对齐当前轮，否则桥接的 isParseResultCurrent 必判 stale 丢弃播放
+        playUrlGeneration = host.resolverCurrentGen()
         host.view()?.playM3u8(target, headers, playUrlGeneration)
         host.setWebPlayUrl(target)
     }

@@ -32,6 +32,19 @@ object M3u8 {
     private const val MAX_FRAME_RATE_AD_BLOCK_SIZE = 12
     private val FRAME_RATE_FEATURES: Map<Int, Set<BigDecimal>> = prepareFrameRateFeatures()
 
+    private val REGEX_AD_MARKER = Pattern.compile("(?i)ad[-_ ]?inject")
+
+    // 去广告增强模式追加的 URI 关键词（参考 type4-server player/adfilter.js KWS）
+    private val ENHANCED_URI_KEYWORDS = arrayOf(
+        "/ads/", "/ads?", "/ad/", "/ad?", ".ad.", ".ads.",
+        "adtag", "ad_tag", "adzone", "dfp", "vtt_ad",
+    )
+
+    private const val SHORT_LEAD_SEG_MAX_SEC = 0.5
+
+    @Volatile
+    private var enhancedMode = false
+
     @JvmField
     var currentAdCount: Int = 0
 
@@ -41,7 +54,7 @@ object M3u8 {
     }
 
     @JvmStatic
-    fun purify(tsUrlPre: String, m3u8content: String?): String? {
+    fun purify(tsUrlPre: String, m3u8content: String?, enhanced: Boolean = false): String? {
         val start = System.currentTimeMillis()
         currentAdCount = 0
         var m3u8content = m3u8content
@@ -57,25 +70,151 @@ object M3u8 {
             }
         }
 
-        var result = removeMinorityUrl(tsUrlPre, m3u8content)
-        if (result != null && currentAdCount > 0) result = get(tsUrlPre, result)
-        else result = get(tsUrlPre, m3u8content)
-        result = keepVodEndList(m3u8content, result)
+        enhancedMode = enhanced
+        try {
+            val base = if (enhanced) dropShortLeadSegments(dropMarkerAdGroups(m3u8content)) else m3u8content
 
-        if (totalSegments > 0 && currentAdCount > totalSegments * 0.5) {
-            AppLog.e("echo-fixAdM3u8 ERROR: removed too many segments " + currentAdCount + "/" + totalSegments + ", using original content")
-            currentAdCount = 0
-            result = m3u8content
-        }
-        if (currentAdCount > 0 && !isPlayableMediaPlaylist(result)) {
-            AppLog.e("echo-fixAdM3u8 ERROR: invalid playlist after ad removal, using original content")
-            currentAdCount = 0
-            result = m3u8content
-        }
+            var result = removeMinorityUrl(tsUrlPre, base)
+            if (result != null && currentAdCount > 0) result = get(tsUrlPre, result)
+            else result = get(tsUrlPre, base)
+            result = keepVodEndList(m3u8content, result)
 
-        val cost = System.currentTimeMillis() - start
-        AppLog.i("echo-fixAdM3u8 cost: " + cost + "ms, removed: " + currentAdCount + " segments")
-        return result
+            if (totalSegments > 0 && currentAdCount > totalSegments * 0.5) {
+                AppLog.e("echo-fixAdM3u8 ERROR: removed too many segments " + currentAdCount + "/" + totalSegments + ", using original content")
+                currentAdCount = 0
+                result = m3u8content
+            }
+            if (currentAdCount > 0 && !isPlayableMediaPlaylist(result)) {
+                AppLog.e("echo-fixAdM3u8 ERROR: invalid playlist after ad removal, using original content")
+                currentAdCount = 0
+                result = m3u8content
+            }
+
+            val cost = System.currentTimeMillis() - start
+            AppLog.i("echo-fixAdM3u8 cost: " + cost + "ms, removed: " + currentAdCount + " segments" + if (enhanced) " (enhanced)" else "")
+            return result
+        } finally {
+            enhancedMode = false
+        }
+    }
+
+    /** 增强规则①：显式注入标记注释（如 "# ppvod-ad-injected"）——标记所在块整块是广告。
+     *  标记落在块首段之前作用于本块；落在末段之后顺延到下一块。 */
+    private fun dropMarkerAdGroups(content: String): String {
+        val normalized = content.replace(Regex("\r\n"), "\n")
+        val groups = buildDiscontinuityGroups(RegexUtils.getPattern("\n").split(normalized))
+        if (groups.size < 2) return content
+
+        val drop = BooleanArray(groups.size)
+        var pending = false
+        var droppedSegs = 0
+        for (i in groups.indices) {
+            val pos = markerPosition(groups[i].lines)
+            val segs = groups[i].segmentCount
+            val isAd = pending || pos == 0
+            if (isAd && segs > 0) {
+                drop[i] = true
+                droppedSegs += segs
+                pending = pos == 1
+            } else if (segs > 0) {
+                pending = pos == 1
+            } else {
+                pending = pending || pos == 1
+            }
+        }
+        if (droppedSegs == 0) return content
+        if (droppedSegs > adSegmentLimit(content)) {
+            AppLog.i("echo-fixAdM3u8 marker groups exceed limit, skip")
+            return content
+        }
+        val sb = StringBuilder()
+        for (i in groups.indices) {
+            if (drop[i]) currentAdCount += groups[i].segmentCount
+            else groups[i].appendTo(sb)
+        }
+        AppLog.i("echo-fixAdM3u8 marker comments: removed " + droppedSegs + " segment(s)")
+        return normalizeMediaPlaylist(sb.toString())
+    }
+
+    /** @return -1 无标记；0 标记在首段之前（本块是广告）；1 标记在末段之后（下一块是广告） */
+    private fun markerPosition(lines: List<String>): Int {
+        var firstMedia = -1
+        var lastMedia = -1
+        var marker = -1
+        for (i in lines.indices) {
+            if (isMediaUriLine(lines[i].trim { it <= ' ' })) {
+                if (firstMedia < 0) firstMedia = i
+                lastMedia = i
+            }
+            if (marker < 0 && isMarkerComment(lines[i])) marker = i
+        }
+        if (marker < 0) return -1
+        if (firstMedia < 0) return 1
+        return if (marker < firstMedia) 0 else if (marker > lastMedia) 1 else 0
+    }
+
+    private fun isMarkerComment(line: String): Boolean {
+        val t = line.trim { it <= ' ' }
+        if (!t.startsWith("#") || t.startsWith("#EXT")) return false
+        return REGEX_AD_MARKER.matcher(t).find()
+    }
+
+    /** 增强规则②：DISCONTINUITY 后首段时长 (0, 0.5)s 的短碎片——只删该分片（参考 type4-server short 规则）。 */
+    private fun dropShortLeadSegments(content: String): String {
+        val normalized = content.replace(Regex("\r\n"), "\n")
+        val groups = buildDiscontinuityGroups(RegexUtils.getPattern("\n").split(normalized))
+        if (groups.size < 2) return content
+
+        var dropped = 0
+        val rebuilt = ArrayList<Group>(groups.size)
+        for (i in groups.indices) {
+            val g = groups[i]
+            if (i == 0 || g.segmentCount == 0) {
+                rebuilt.add(g)
+                continue
+            }
+            val cut = shortLeadCutIndex(g.lines)
+            if (cut[0] < 0) {
+                rebuilt.add(g)
+                continue
+            }
+            val ng = Group()
+            for (j in g.lines.indices) {
+                if (j < cut[0] || j > cut[1]) ng.add(g.lines[j])
+            }
+            dropped += 1
+            rebuilt.add(ng)
+        }
+        if (dropped == 0) return content
+        if (dropped > adSegmentLimit(content)) return content
+        val sb = StringBuilder()
+        for (g in rebuilt) g.appendTo(sb)
+        currentAdCount += dropped
+        AppLog.i("echo-fixAdM3u8 short lead segments: removed " + dropped)
+        return normalizeMediaPlaylist(sb.toString())
+    }
+
+    /** 返回被删分片在 group.lines 中的 [start, end] 区间（EXTINF 起到 URI 止），无则 [-1,-1] */
+    private fun shortLeadCutIndex(lines: List<String>): IntArray {
+        var uriIdx = -1
+        for (i in lines.indices) {
+            if (isMediaUriLine(lines[i].trim { it <= ' ' })) {
+                uriIdx = i
+                break
+            }
+        }
+        if (uriIdx < 0) return intArrayOf(-1, -1)
+        var extinfIdx = -1
+        for (i in uriIdx downTo 0) {
+            if (lines[i].trim { it <= ' ' }.startsWith(TAG_MEDIA_DURATION)) {
+                extinfIdx = i
+                break
+            }
+        }
+        if (extinfIdx < 0) return intArrayOf(-1, -1)
+        val seconds = parseExtInfDuration(lines[extinfIdx]).toDouble()
+        if (seconds <= 0.0 || seconds >= SHORT_LEAD_SEG_MAX_SEC) return intArrayOf(-1, -1)
+        return intArrayOf(extinfIdx, uriIdx)
     }
 
     private fun maxPercent(preUrlMap: HashMap<String, Int>): Double {
@@ -615,7 +754,13 @@ object M3u8 {
     }
 
     private fun isAdSegmentUri(line: String): Boolean {
-        return REGEX_AD_SEGMENT_URI.matcher(line).find()
+        if (REGEX_AD_SEGMENT_URI.matcher(line).find()) return true
+        if (!enhancedMode) return false
+        val low = line.lowercase()
+        for (kw in ENHANCED_URI_KEYWORDS) {
+            if (low.contains(kw)) return true
+        }
+        return false
     }
 
     private fun hasAdDomain(url: String): Boolean {
@@ -690,7 +835,11 @@ object M3u8 {
 
         val adLike = hasAdFeature || differentHost || (group.segmentCount <= 2 && differentPath)
 
-        return shortGroup && adLike
+        if (shortGroup && adLike) return true
+
+        // 增强规则③：目录/主机偏离的非主块整块删除（参考 type4-server path 规则，
+        // 由 purify 末尾的 50%/可播放性安全阀兜底）
+        return enhancedMode && (differentHost || differentPath)
     }
 
     private fun hostOf(url: String): String {
