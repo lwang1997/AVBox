@@ -130,6 +130,8 @@ object KVKeys {
     const val ANIME4K_DEBLUR = "anime4k_deblur"
     const val TMDB_ENABLE = "tmdb_enable"
     const val TMDB_POSTER_STYLE = "tmdb_poster_style"
+    const val TMDB_LOGO_ENABLED = "tmdb_logo_enabled"
+    const val TMDB_IMAGE_QUALITY = "tmdb_image_quality"
     const val TMDB_API_KEY = "tmdb_api_key"
     const val TMDB_API_BASE = "tmdb_api_base"
     const val TMDB_IMAGE_BASE = "tmdb_image_base"

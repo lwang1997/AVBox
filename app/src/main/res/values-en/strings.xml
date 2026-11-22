@@ -453,6 +453,11 @@
     <string name="tmdb_poster_style_fixed">Fixed</string>
     <string name="tmdb_poster_style_random">Random</string>
     <string name="tmdb_poster_style_roll">Rotate</string>
+    <string name="tmdb_logo_enabled">Show title logo</string>
+    <string name="tmdb_image_quality">Image quality</string>
+    <string name="tmdb_image_quality_standard">Standard (recommended)</string>
+    <string name="tmdb_image_quality_data_saver">Data saver</string>
+    <string name="tmdb_image_quality_high">High (original)</string>
     <string name="tmdb_api_key">API Key</string>
     <string name="tmdb_api_base">API proxy URL</string>
     <string name="tmdb_image_base">Image proxy URL</string>

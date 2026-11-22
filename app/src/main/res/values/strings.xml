@@ -453,6 +453,11 @@
     <string name="tmdb_poster_style_fixed">固定</string>
     <string name="tmdb_poster_style_random">随机</string>
     <string name="tmdb_poster_style_roll">轮播</string>
+    <string name="tmdb_logo_enabled">显示标题 Logo</string>
+    <string name="tmdb_image_quality">图片清晰度</string>
+    <string name="tmdb_image_quality_standard">标准（推荐）</string>
+    <string name="tmdb_image_quality_data_saver">省流量</string>
+    <string name="tmdb_image_quality_high">高清原图</string>
     <string name="tmdb_api_key">API Key</string>
     <string name="tmdb_api_base">API 代理地址</string>
     <string name="tmdb_image_base">图片代理地址</string>

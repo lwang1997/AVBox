@@ -18,6 +18,7 @@ import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.github.avbox.osc.R
+import com.github.avbox.osc.util.TmdbImageQuality
 import com.github.avbox.osc.ui.components.SettingsCard
 import com.github.avbox.osc.ui.components.SettingsCardPosition
 import com.github.avbox.osc.ui.components.SettingsGroup
@@ -62,7 +63,19 @@ fun ConfigTmdbScreen(
                     onCheckedChange = actions.setEnabled,
                 )
             }
-            SettingsCard(SettingsCardPosition.LAST) {
+            SettingsCard(SettingsCardPosition.MIDDLE) {
+                SettingsSwitchRow(
+                    title = stringResource(R.string.tmdb_logo_enabled),
+                    leadingIconRes = if (state.logoEnabled) {
+                        R.drawable.ic_config_tmdb_on
+                    } else {
+                        R.drawable.ic_config_tmdb_off
+                    },
+                    checked = state.logoEnabled,
+                    onCheckedChange = actions.setLogoEnabled,
+                )
+            }
+            SettingsCard(SettingsCardPosition.MIDDLE) {
                 SettingsOptionMenuRow(
                     title = stringResource(R.string.tmdb_poster_style),
                     leadingIconRes = R.drawable.ic_config_poster_style,
@@ -70,6 +83,16 @@ fun ConfigTmdbScreen(
                     options = TmdbPosterStyle.entries.map { stringResource(it.labelRes()) },
                     selectedIndex = state.posterStyle.ordinal,
                     onSelect = { index -> actions.setPosterStyle(TmdbPosterStyle.of(index)) },
+                )
+            }
+            SettingsCard(SettingsCardPosition.LAST) {
+                SettingsOptionMenuRow(
+                    title = stringResource(R.string.tmdb_image_quality),
+                    leadingIconRes = R.drawable.ic_config_image_quality,
+                    valueText = stringResource(state.imageQuality.labelRes()),
+                    options = TmdbImageQuality.entries.map { stringResource(it.labelRes()) },
+                    selectedIndex = state.imageQuality.ordinal,
+                    onSelect = { index -> actions.setImageQuality(TmdbImageQuality.entries[index]) },
                 )
             }
         }

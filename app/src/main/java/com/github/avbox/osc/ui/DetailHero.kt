@@ -570,19 +570,26 @@ private fun HeroCircleButton(
 private fun DetailHeroTitle(vm: DetailViewModel, title: String, altTitle: String?, year: Int,
                             widthFraction: Float, color: Color) {
     val epoch by TmdbImages.configEpoch.collectAsState()
-    LaunchedEffect(vm, title, altTitle, year, epoch) {
-        vm.ensureTmdbLogo(title, altTitle, year)
+    val logoEnabled = remember(epoch) { TmdbImages.isLogoEnabled() }
+    LaunchedEffect(vm, title, altTitle, year, epoch, logoEnabled) {
+        if (logoEnabled) vm.ensureTmdbLogo(title, altTitle, year) else vm.clearTmdbLogo()
     }
     val logoPath by vm.tmdbLogoPath.collectAsState()
-    var waitExpired by remember(title, altTitle, year, epoch) { mutableStateOf(false) }
-    LaunchedEffect(title, altTitle, year, epoch, logoPath) {
+    var waitExpired by remember(title, altTitle, year, epoch, logoEnabled) {
+        mutableStateOf(!logoEnabled)
+    }
+    LaunchedEffect(title, altTitle, year, epoch, logoPath, logoEnabled) {
         waitExpired = false
+        if (!logoEnabled) {
+            waitExpired = true
+            return@LaunchedEffect
+        }
         if (logoPath == null) {
             delay(HERO_TMDB_LOGO_TIMEOUT_MS)
             waitExpired = true
         }
     }
-    val logo = logoPath
+    val logo = if (logoEnabled) logoPath else null
     if (logo == null) {
         if (waitExpired) DetailHeroTitleText(title, color)
     } else if (logo.isEmpty()) {

@@ -13,20 +13,20 @@ class HeroImageSizeTest {
     }
 
     @Test
-    fun posterSwitchesToOriginalAboveThreshold() {
+    fun posterSwitchesToFullAboveThreshold() {
         assertEquals(PosterSize.FULL, heroPosterSize(801))
         assertEquals(PosterSize.FULL, heroPosterSize(1080))
         assertEquals(PosterSize.FULL, heroPosterSize(2800))
     }
 
     @Test
-    fun backdropUsesThreeTiers() {
+    fun backdropNeverUsesOriginal() {
         assertEquals(PosterSize.LARGE, heroBackdropSize(780))
         assertEquals(PosterSize.LARGE, heroBackdropSize(800))
         assertEquals(PosterSize.WIDE, heroBackdropSize(801))
         assertEquals(PosterSize.WIDE, heroBackdropSize(1280))
         assertEquals(PosterSize.WIDE, heroBackdropSize(1400))
-        assertEquals(PosterSize.FULL, heroBackdropSize(1401))
-        assertEquals(PosterSize.FULL, heroBackdropSize(2800))
+        assertEquals(PosterSize.WIDE, heroBackdropSize(1401))
+        assertEquals(PosterSize.WIDE, heroBackdropSize(2800))
     }
 }

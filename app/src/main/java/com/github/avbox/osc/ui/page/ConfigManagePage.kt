@@ -253,6 +253,7 @@ fun ConfigManageScreen(onNavigateBack: () -> Unit) {
                 selectedValue = mode,
                 onOptionSelected = { mode = it },
                 containerColor = MaterialTheme.colorScheme.surfaceBright,
+                stableShape = true,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(start = 16.dp, end = 16.dp, top = topPad + 8.dp),

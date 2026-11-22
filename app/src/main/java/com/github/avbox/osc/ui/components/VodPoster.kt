@@ -55,8 +55,6 @@ internal enum class PosterSize { THUMB, LARGE, WIDE, FULL }
 
 internal const val HERO_IMAGE_LARGE_MAX_WIDTH_PX = 800
 
-internal const val HERO_IMAGE_WIDE_MAX_WIDTH_PX = 1400
-
 internal data class HeroImageSizes(val poster: PosterSize, val backdrop: PosterSize)
 
 internal fun heroPosterSize(widthPx: Int): PosterSize =
@@ -64,8 +62,7 @@ internal fun heroPosterSize(widthPx: Int): PosterSize =
 
 internal fun heroBackdropSize(widthPx: Int): PosterSize = when {
     widthPx <= HERO_IMAGE_LARGE_MAX_WIDTH_PX -> PosterSize.LARGE
-    widthPx <= HERO_IMAGE_WIDE_MAX_WIDTH_PX -> PosterSize.WIDE
-    else -> PosterSize.FULL
+    else -> PosterSize.WIDE
 }
 
 @Composable
@@ -192,7 +189,7 @@ internal fun tmdbUrlOf(posterPath: String, size: PosterSize): String = when (siz
     PosterSize.THUMB -> TmdbImages.imageUrl(posterPath, false)
     PosterSize.LARGE -> TmdbImages.imageUrl(posterPath, true)
     PosterSize.WIDE -> TmdbImages.backdropUrl(posterPath)
-    PosterSize.FULL -> TmdbImages.fullPosterUrl(posterPath)
+    PosterSize.FULL -> TmdbImages.imageUrl(posterPath, large = true)
 }
 
 @Composable

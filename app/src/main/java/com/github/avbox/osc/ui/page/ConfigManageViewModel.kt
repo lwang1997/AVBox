@@ -22,6 +22,7 @@ import com.github.avbox.osc.util.AppLog
 import com.github.avbox.osc.util.LanguageManager
 import com.github.avbox.osc.api.TmdbApi
 import com.github.avbox.osc.api.TmdbPoster
+import com.github.avbox.osc.util.TmdbImageQuality
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -54,10 +55,19 @@ enum class TmdbPosterStyle {
     }
 }
 
+@StringRes
+fun TmdbImageQuality.labelRes(): Int = when (this) {
+    TmdbImageQuality.Standard -> R.string.tmdb_image_quality_standard
+    TmdbImageQuality.DataSaver -> R.string.tmdb_image_quality_data_saver
+    TmdbImageQuality.High -> R.string.tmdb_image_quality_high
+}
+
 @Immutable
 data class ConfigTmdbState(
     val enabled: Boolean,
     val posterStyle: TmdbPosterStyle,
+    val logoEnabled: Boolean,
+    val imageQuality: TmdbImageQuality,
     val apiKey: String,
     val apiBase: String,
     val imageBase: String,
@@ -69,6 +79,8 @@ data class ConfigTmdbState(
 data class ConfigTmdbActions(
     val setEnabled: (Boolean) -> Unit,
     val setPosterStyle: (TmdbPosterStyle) -> Unit,
+    val setLogoEnabled: (Boolean) -> Unit,
+    val setImageQuality: (TmdbImageQuality) -> Unit,
     val setApiKey: (String) -> Unit,
     val setApiBase: (String) -> Unit,
     val setImageBase: (String) -> Unit,
@@ -131,6 +143,8 @@ class ConfigManageViewModel(
         ConfigTmdbState(
             enabled = KV.get(KVKeys.TMDB_ENABLE, false),
             posterStyle = TmdbPosterStyle.of(KV.get(KVKeys.TMDB_POSTER_STYLE, 0)),
+            logoEnabled = KV.get(KVKeys.TMDB_LOGO_ENABLED, true),
+            imageQuality = TmdbImageQuality.of(KV.get(KVKeys.TMDB_IMAGE_QUALITY, 0)),
             apiKey = KV.get(KVKeys.TMDB_API_KEY, ""),
             apiBase = KV.get(KVKeys.TMDB_API_BASE, ""),
             imageBase = KV.get(KVKeys.TMDB_IMAGE_BASE, ""),
@@ -157,6 +171,8 @@ class ConfigManageViewModel(
     fun tmdbActions(): ConfigTmdbActions = ConfigTmdbActions(
         setEnabled = { value -> updateTmdbEnabled(value) },
         setPosterStyle = { style -> updateTmdbPosterStyle(style) },
+        setLogoEnabled = { value -> updateTmdbLogoEnabled(value) },
+        setImageQuality = { quality -> updateTmdbImageQuality(quality) },
         setApiKey = { value -> updateTmdbApiKey(value) },
         setApiBase = { value -> updateTmdbApiBase(value) },
         setImageBase = { value -> updateTmdbImageBase(value) },
@@ -175,6 +191,18 @@ class ConfigManageViewModel(
     private fun updateTmdbPosterStyle(style: TmdbPosterStyle) {
         KV.put(KVKeys.TMDB_POSTER_STYLE, style.ordinal)
         tmdbState.value = tmdbState.value.copy(posterStyle = style)
+        TmdbPoster.notifyConfigChanged()
+    }
+
+    private fun updateTmdbLogoEnabled(enabled: Boolean) {
+        KV.put(KVKeys.TMDB_LOGO_ENABLED, enabled)
+        tmdbState.value = tmdbState.value.copy(logoEnabled = enabled)
+        TmdbPoster.notifyConfigChanged()
+    }
+
+    private fun updateTmdbImageQuality(quality: TmdbImageQuality) {
+        KV.put(KVKeys.TMDB_IMAGE_QUALITY, quality.ordinal)
+        tmdbState.value = tmdbState.value.copy(imageQuality = quality)
         TmdbPoster.notifyConfigChanged()
     }
 

@@ -54,7 +54,8 @@ class DanmakuApi {
         }
 
         private val TAG = DanmakuApi::class.java.simpleName
-        private const val BUILTIN_API = "https://logvardanmu.konfan.cn/87654321"
+        // 原内置 https://logvardanmu.konfan.cn/87654321 于 2026-11 拉弹幕接口频繁超时(实测 comment 30s+ 无响应)，改用公开可访问实例
+        private const val BUILTIN_API = "https://danmuapi-lilac-tau.vercel.app/87654321"
         private val BUILTIN_TIMEOUT = TimeUnit.SECONDS.toMillis(20)
         private const val BUILTIN_MAX_RETRY = 2
         private const val EPISODE_QUERY_NUMBER = 0

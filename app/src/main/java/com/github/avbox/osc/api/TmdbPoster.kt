@@ -137,7 +137,7 @@ object TmdbPoster {
     }
 
     fun cachedLogo(name: String?, year: Int, altName: String? = null): String? {
-        if (!isActive()) return ""
+        if (!isActive() || !TmdbImages.isLogoEnabled()) return ""
         var known = false
         for (candidate in nameCandidates(name, altName)) {
             val hits = cachedHits(candidate) ?: continue
@@ -179,7 +179,7 @@ object TmdbPoster {
     }
 
     suspend fun resolveLogo(name: String?, year: Int, altName: String? = null): String {
-        if (!isActive()) return ""
+        if (!isActive() || !TmdbImages.isLogoEnabled()) return ""
         for (candidate in nameCandidates(name, altName)) {
             val hits = ensureHits(candidate) ?: continue
             val best = pickBestWithAlias(hits, candidate, year) ?: continue

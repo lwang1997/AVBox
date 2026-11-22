@@ -146,10 +146,14 @@ class DetailViewModel : ViewModel(), TmdbPosterCache {
         }
     }
 
+    fun clearTmdbLogo() {
+        _tmdbLogoPath.value = null
+        tmdbLogoKey = null
+    }
+
     fun ensureTmdbLogo(title: String?, altTitle: String?, year: Int) {
-        if (title.isNullOrBlank()) {
-            _tmdbLogoPath.value = null
-            tmdbLogoKey = null
+        if (title.isNullOrBlank() || !TmdbImages.isLogoEnabled()) {
+            clearTmdbLogo()
             return
         }
         val epoch = TmdbImages.configEpoch.value

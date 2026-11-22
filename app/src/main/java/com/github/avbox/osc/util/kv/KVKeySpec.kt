@@ -85,6 +85,7 @@ class KVKeySpec : KVDecoder.TypeRegistry {
             register(KVKeys.SEARCH_THREADS, 0)
             register(KVKeys.LONG_PRESS_SPEED, 0)
             register(KVKeys.TMDB_POSTER_STYLE, 0)
+            register(KVKeys.TMDB_IMAGE_QUALITY, 0)
             register(KVKeys.BUFFER_TIMES, 0)
             register(KVKeys.PRELOAD_DURATION, 0)
             register(KVKeys.EXO_CACHE_SIZE_MB, 0)
@@ -128,6 +129,7 @@ class KVKeySpec : KVDecoder.TypeRegistry {
             register(KVKeys.LIQUID_GLASS_DISPERSION, false)
             register(KVKeys.THEME_PURE_BLACK, false)
             register(KVKeys.TMDB_ENABLE, false)
+            register(KVKeys.TMDB_LOGO_ENABLED, true)
 
             register(KVKeys.LIQUID_GLASS_BLUR, 0f)
             register(KVKeys.LIQUID_GLASS_DISTORTION, 0f)

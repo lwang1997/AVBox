@@ -83,6 +83,8 @@ fun <T> CapsuleSegmentedButton(
     style: SegmentStyle = SegmentStyle.Connected,
     containerColor: Color = MaterialTheme.colorScheme.surfaceContainer,
     pressMorph: Boolean = false,
+    /** 选中态只换颜色、保持与未选中相同的形状（Connected 下避免变成药丸凸起）。 */
+    stableShape: Boolean = false,
 ) {
     val selectedIndex = options.indexOfFirst { it.value == selectedValue }.coerceAtLeast(0)
 
@@ -152,6 +154,7 @@ fun <T> CapsuleSegmentedButton(
                 style = style,
                 containerColor = containerColor,
                 pressMorph = pressMorph,
+                stableShape = stableShape,
                 modifier = Modifier.weight(1f),
             )
         }
@@ -170,6 +173,7 @@ private fun <T> CapsuleToggleButton(
     modifier: Modifier = Modifier,
     containerColor: Color = MaterialTheme.colorScheme.surfaceContainerHighest,
     pressMorph: Boolean = false,
+    stableShape: Boolean = false,
 ) {
     val interactionSource = remember { MutableInteractionSource() }
     val isPressed by interactionSource.collectIsPressedAsState()
@@ -214,19 +218,29 @@ private fun <T> CapsuleToggleButton(
             checked = checked,
             onCheckedChange = onCheckedChange,
             modifier = segmentModifier,
-            shapes = if (pressMorph) {
-                val base = when (index) {
-                    0 -> ButtonGroupDefaults.connectedLeadingButtonShapes()
-                    count - 1 -> ButtonGroupDefaults.connectedTrailingButtonShapes()
-                    else -> ButtonGroupDefaults.connectedMiddleButtonShapes()
+            shapes = when {
+                stableShape -> {
+                    // 选中只换颜色：三态统一用未选中形状，避免药丸凸起。
+                    val base = when (index) {
+                        0 -> ButtonGroupDefaults.connectedLeadingButtonShapes()
+                        count - 1 -> ButtonGroupDefaults.connectedTrailingButtonShapes()
+                        else -> ButtonGroupDefaults.connectedMiddleButtonShapes()
+                    }
+                    ToggleButtonShapes(shape = base.shape, pressedShape = base.shape, checkedShape = base.shape)
                 }
-                ToggleButtonShapes(
-                    shape = base.shape,
-                    pressedShape = RoundedCornerShape(PressMorphCornerRadius),
-                    checkedShape = base.checkedShape,
-                )
-            } else {
-                when (index) {
+                pressMorph -> {
+                    val base = when (index) {
+                        0 -> ButtonGroupDefaults.connectedLeadingButtonShapes()
+                        count - 1 -> ButtonGroupDefaults.connectedTrailingButtonShapes()
+                        else -> ButtonGroupDefaults.connectedMiddleButtonShapes()
+                    }
+                    ToggleButtonShapes(
+                        shape = base.shape,
+                        pressedShape = RoundedCornerShape(PressMorphCornerRadius),
+                        checkedShape = base.checkedShape,
+                    )
+                }
+                else -> when (index) {
                     0 -> ButtonGroupDefaults.connectedLeadingButtonShapes()
                     count - 1 -> ButtonGroupDefaults.connectedTrailingButtonShapes()
                     else -> ButtonGroupDefaults.connectedMiddleButtonShapes()
