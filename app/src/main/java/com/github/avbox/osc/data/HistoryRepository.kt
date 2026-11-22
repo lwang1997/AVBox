@@ -129,13 +129,17 @@ internal class RoomHistoryRepository(
 
     override suspend fun deleteVodRecord(sourceKey: String?, vodInfo: VodInfo) {
         val dao = records()
-        val record = dao.getVodRecord(CurrentSubscription.cid(), sourceKey, vodInfo.id)
+        val cid = CurrentSubscription.cid()
+        val record = dao.getVodRecord(cid, sourceKey, vodInfo.id)
         if (record != null) {
             dao.delete(record)
+            SyncTombstones.mark(SyncTombstones.KIND_HISTORY, cid, sourceKey, vodInfo.id)
         }
     }
 
     override suspend fun deleteVodRecordAll() {
-        records().deleteAll(CurrentSubscription.cid())
+        val cid = CurrentSubscription.cid()
+        records().deleteAll(cid)
+        SyncTombstones.markClear(SyncTombstones.KIND_HISTORY, cid)
     }
 }

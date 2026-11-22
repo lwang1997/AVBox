@@ -14,6 +14,7 @@ import com.github.avbox.osc.data.AppDataManager
 import com.github.avbox.osc.io.FileUtils
 import com.github.avbox.osc.net.HttpClients
 import com.github.avbox.osc.server.ControlManager
+import com.github.avbox.osc.sync.AutoSync
 import com.github.avbox.osc.util.AppContextHolder
 import com.github.avbox.osc.util.ActivityStack
 import com.github.avbox.osc.util.EpgUtil
@@ -78,6 +79,7 @@ class App : Application() {
             FileUtils.ensureNoMediaMarker()
             Probe.trace("boot:cleanPlayerCache") { FileUtils.cleanPlayerCache() }
         }, "exo-cache-boot").start()
+        Probe.trace("boot:autoSync") { AutoSync.onAppLaunch() }
         bootMark("onCreateDone")
     }
 

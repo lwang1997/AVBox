@@ -420,6 +420,8 @@ fun SettingsTextFieldRow(
     enabled: Boolean = true,
     masked: Boolean = false,
     clearable: Boolean = false,
+    fieldShape: Shape = TextFieldShape,
+    fieldHeight: androidx.compose.ui.unit.Dp = TextFieldHeight,
 ) {
     var revealed by remember { mutableStateOf(false) }
     val focusManager = LocalFocusManager.current
@@ -433,14 +435,14 @@ fun SettingsTextFieldRow(
             modifier = Modifier.padding(top = 8.dp, bottom = 8.dp),
         )
         Surface(
-            shape = TextFieldShape,
+            shape = fieldShape,
             color = MaterialTheme.colorScheme.surfaceContainer,
             modifier = Modifier.fillMaxWidth(),
         ) {
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(TextFieldHeight)
+                    .height(fieldHeight)
                     .padding(start = 16.dp, end = 8.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {

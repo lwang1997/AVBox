@@ -54,18 +54,28 @@ internal class RoomCollectRepository(
     }
 
     override suspend fun deleteVodCollect(id: Int) {
-        collects().delete(id)
+        val dao = collects()
+        val record = dao.getVodCollect(id)
+        if (record != null) {
+            dao.delete(id)
+            SyncTombstones.mark(SyncTombstones.KIND_COLLECT, record.cid, record.sourceKey, record.vodId)
+        } else {
+            dao.delete(id)
+        }
     }
 
     override suspend fun deleteVodCollect(sourceKey: String?, vodInfo: VodInfo) {
         val dao = collects()
-        val record = dao.getVodCollect(CurrentSubscription.cid(), sourceKey, vodInfo.id)
+        val cid = CurrentSubscription.cid()
+        val record = dao.getVodCollect(cid, sourceKey, vodInfo.id)
         if (record != null) {
             dao.delete(record)
+            SyncTombstones.mark(SyncTombstones.KIND_COLLECT, cid, sourceKey, vodInfo.id)
         }
     }
 
     override suspend fun deleteVodCollectAll() {
         collects().deleteAll()
+        SyncTombstones.markClear(SyncTombstones.KIND_COLLECT, "")
     }
 }

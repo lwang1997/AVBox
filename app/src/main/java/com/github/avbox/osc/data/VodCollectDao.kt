@@ -32,4 +32,13 @@ interface VodCollectDao {
 
     @Query("DELETE FROM vodCollect")
     suspend fun deleteAll()
+
+    @Query("DELETE FROM vodCollect where `cid`=:cid and `sourceKey`=:sourceKey and `vodId`=:vodId")
+    suspend fun deleteByKey(cid: String?, sourceKey: String?, vodId: String?)
+
+    @Query("DELETE FROM vodCollect where `cid`=:cid")
+    suspend fun deleteByCid(cid: String?)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAll(records: List<VodCollect>)
 }

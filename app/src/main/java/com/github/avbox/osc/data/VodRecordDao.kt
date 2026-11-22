@@ -35,4 +35,16 @@ interface VodRecordDao {
 
     @Query("DELETE FROM vodRecord where `cid`=:cid and id NOT IN (SELECT id FROM vodRecord WHERE `cid`=:cid ORDER BY updateTime desc, id desc LIMIT :size)")
     suspend fun reserver(cid: String?, size: Int): Int
+
+    @Query("select * from vodRecord")
+    suspend fun getAllRaw(): List<VodRecord>
+
+    @Query("DELETE FROM vodRecord where `cid`=:cid and `sourceKey`=:sourceKey and `vodId`=:vodId")
+    suspend fun deleteByKey(cid: String?, sourceKey: String?, vodId: String?)
+
+    @Query("DELETE FROM vodRecord where `cid`=:cid")
+    suspend fun deleteByCid(cid: String?)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAll(records: List<VodRecord>)
 }

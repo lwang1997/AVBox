@@ -74,6 +74,16 @@ object KV {
         return matched
     }
 
+    /** 读取未经解码的原始字符串，供跨设备同步无损搬运键值。 */
+    @JvmStatic
+    fun rawGet(key: String): String? = requireStore().decodeString(key)
+
+    /** 写入未经编码的原始字符串，必须与 rawGet 成对使用。 */
+    @JvmStatic
+    fun rawPut(key: String, raw: String) {
+        requireStore().encode(key, raw)
+    }
+
     private fun requireStore(): MMKV {
         val instance = store
         if (instance == null) throw IllegalStateException("KV.init(Context) 未调用") // i18n: keep(异常消息)

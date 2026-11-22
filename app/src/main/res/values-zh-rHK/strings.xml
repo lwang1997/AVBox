@@ -90,4 +90,7 @@
     <string name="tab_following">追劇</string>
     <string name="tab_mine">我的</string>
     <string name="following_empty">暫無追劇</string>
+
+    <string name="settings_sync_title">多端同步</string>
+    <string name="settings_sync_subtitle">透過 WebDAV 同步觀看資料</string>
 </resources>

@@ -59,6 +59,11 @@ object PlaybackProgress {
         percentsFlow.value = percentSnapshot()
     }
 
+    /** 同步落库后刷新进度条快照 */
+    fun reload() {
+        writer.execute { refreshPercents() }
+    }
+
     fun key(sourceKey: String?, vodId: String?): String =
         sourceKey.orEmpty() + "|" + vodId.orEmpty()
 

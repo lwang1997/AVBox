@@ -19,4 +19,16 @@ interface VodFollowDao {
 
     @Query("delete from vodFollow where `id` in (:ids)")
     suspend fun deleteSelected(ids: List<Int>)
+
+    @Query("select * from vodFollow")
+    suspend fun getAllRaw(): List<VodFollow>
+
+    @Query("DELETE FROM vodFollow where `cid`=:cid and `sourceKey`=:sourceKey and `vodId`=:vodId")
+    suspend fun deleteByKey(cid: String?, sourceKey: String?, vodId: String?)
+
+    @Query("DELETE FROM vodFollow where `cid`=:cid")
+    suspend fun deleteByCid(cid: String?)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAll(records: List<VodFollow>)
 }

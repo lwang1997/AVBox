@@ -46,6 +46,13 @@ internal class RoomFollowRepository(
 
     override suspend fun deleteSelected(ids: List<Int>) {
         if (ids.isEmpty()) return
-        follows().deleteSelected(ids)
+        val dao = follows()
+        val idSet = ids.toHashSet()
+        dao.getAllRaw().forEach { record ->
+            if (record.id in idSet) {
+                SyncTombstones.mark(SyncTombstones.KIND_FOLLOW, record.cid, record.sourceKey, record.vodId)
+            }
+        }
+        dao.deleteSelected(ids)
     }
 }

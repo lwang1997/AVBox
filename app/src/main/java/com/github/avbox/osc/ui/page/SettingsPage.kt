@@ -47,6 +47,7 @@ import com.github.avbox.osc.ui.ConfigManageActivity
 import com.github.avbox.osc.ui.LogViewActivity
 import com.github.avbox.osc.ui.PlaySettingsActivity
 import com.github.avbox.osc.ui.PreferenceSettingsActivity
+import com.github.avbox.osc.ui.SyncSettingsActivity
 import com.github.avbox.osc.ui.ThemeSettingsActivity
 import com.github.avbox.osc.ui.components.AVBoxAlertDialog
 import com.github.avbox.osc.ui.components.AVBoxBottomSheet
@@ -201,12 +202,20 @@ fun SettingsPage(
                         onClick = { PlaySettingsActivity.start(context) },
                     )
                 }
-                SettingsCard(SettingsCardPosition.LAST) {
+                SettingsCard(SettingsCardPosition.MIDDLE) {
                     SettingsRow(
                         title = stringResource(R.string.settings_preference_title),
                         subtitle = stringResource(R.string.settings_preference_subtitle),
                         iconRes = R.drawable.ic_settings_preference,
                         onClick = { PreferenceSettingsActivity.start(context) },
+                    )
+                }
+                SettingsCard(SettingsCardPosition.LAST) {
+                    SettingsRow(
+                        title = stringResource(R.string.settings_sync_title),
+                        subtitle = stringResource(R.string.settings_sync_subtitle),
+                        iconRes = R.drawable.ic_settings_sync,
+                        onClick = { SyncSettingsActivity.start(context) },
                     )
                 }
             }

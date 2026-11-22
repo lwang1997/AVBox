@@ -137,4 +137,16 @@ object KVKeys {
     const val TMDB_IMAGE_BASE = "tmdb_image_base"
     const val TMDB_API_BASE_DEFAULT = "https://api.tmdb.org"
     const val TMDB_IMAGE_BASE_DEFAULT = "https://images.tmdb.org/t/p"
+
+    // 多端同步配置
+    const val SYNC_WEBDAV_URL = "sync_webdav_url"
+    const val SYNC_WEBDAV_USER = "sync_webdav_user"
+    const val SYNC_WEBDAV_PASSWORD = "sync_webdav_password"
+    const val SYNC_AUTO_ENABLED = "sync_auto_enabled"
+    const val SYNC_ITEM_HISTORY = "sync_item_history"
+    const val SYNC_ITEM_COLLECT = "sync_item_collect"
+    const val SYNC_ITEM_FOLLOW = "sync_item_follow"
+    const val SYNC_ITEM_PROGRESS = "sync_item_progress"
+    const val SYNC_DEVICE_ID = "sync_device_id"
+    const val SYNC_LAST_SYNC_AT = "sync_last_sync_at"
 }
