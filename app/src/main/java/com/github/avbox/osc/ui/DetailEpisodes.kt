@@ -6,7 +6,10 @@ import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -17,6 +20,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsIgnoringVisibility
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -25,6 +29,8 @@ import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.grid.itemsIndexed as gridItemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
@@ -64,6 +70,11 @@ import com.github.avbox.osc.util.TmdbImages
 import kotlinx.coroutines.launch
 
 private val EpisodeThumbWidth = 210.dp
+
+private val EpisodeGridMinCardWidth = 56.dp
+private const val EpisodeGridRowsPerPage = 3
+private val EpisodeGridChipHeight = 44.dp
+private val EpisodeGridSpacing = 8.dp
 
 private const val EpisodeSheetHeightFraction = 0.6f
 
@@ -111,8 +122,6 @@ internal fun EpisodeRow(
                 onClick = { vm.showEpisodeSheet() },
             )
         }
-        val listState = rememberLazyListState()
-        var prevReverseSort by remember { mutableStateOf(info.reverseSort) }
         val seasonHint = remember(info.name, currentFlag) {
             vm.seasonHintFor(info.name, currentFlag)
         }
@@ -129,39 +138,126 @@ internal fun EpisodeRow(
             episodeNumbers,
             info.reverseSort,
         )
-        val thumbnails = !episodeMeta.isNullOrEmpty()
-        LaunchedEffect(playIndex, currentFlag, episodes.size, info.reverseSort) {
-            if (episodes.isEmpty()) return@LaunchedEffect
-            val reverseChanged = info.reverseSort != prevReverseSort
-            prevReverseSort = info.reverseSort
-            if (reverseChanged) {
-                listState.scrollToItem(0)
+        if (!episodeMeta.isNullOrEmpty()) {
+            ThumbnailEpisodeRow(
+                episodes = episodes,
+                episodeNumbers = episodeNumbers,
+                episodeMeta = episodeMeta,
+                playIndex = playIndex,
+                reverseSort = info.reverseSort,
+                currentFlag = currentFlag,
+                onClick = { vm.onEpisodeClick(it) },
+            )
+        } else {
+            CompactEpisodeGrid(
+                episodes = episodes,
+                playIndex = playIndex,
+                reverseSort = info.reverseSort,
+                currentFlag = currentFlag,
+                onClick = { vm.onEpisodeClick(it) },
+            )
+        }
+    }
+}
+
+@Composable
+private fun ThumbnailEpisodeRow(
+    episodes: List<VodInfo.VodSeries>,
+    episodeNumbers: List<Int>,
+    episodeMeta: List<TmdbEpisode>,
+    playIndex: Int,
+    reverseSort: Boolean,
+    currentFlag: String?,
+    onClick: (Int) -> Unit,
+) {
+    val listState = rememberLazyListState()
+    var prevReverseSort by remember { mutableStateOf(reverseSort) }
+    LaunchedEffect(playIndex, currentFlag, episodes.size, reverseSort) {
+        if (episodes.isEmpty()) return@LaunchedEffect
+        val reverseChanged = reverseSort != prevReverseSort
+        prevReverseSort = reverseSort
+        if (reverseChanged) {
+            listState.scrollToItem(0)
+        } else if (playIndex >= 0) {
+            listState.scrollToItem(minOf(playIndex, episodes.size - 1))
+        }
+    }
+    LazyRow(
+        state = listState,
+        contentPadding = PaddingValues(horizontal = 16.dp),
+        horizontalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
+        itemsIndexed(episodes) { index, ep ->
+            EpisodeCard(
+                name = ep.name ?: (index + 1).toString(),
+                episodeNumber = episodeNumbers.getOrNull(index)?.takeIf { it > 0 } ?: (index + 1),
+                episode = episodeMeta.getOrNull(index),
+                selected = index == playIndex,
+                onClick = { onClick(index) },
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun CompactEpisodeGrid(
+    episodes: List<VodInfo.VodSeries>,
+    playIndex: Int,
+    reverseSort: Boolean,
+    currentFlag: String?,
+    onClick: (Int) -> Unit,
+) {
+    if (episodes.isEmpty()) return
+    val maxGridHeight = EpisodeGridChipHeight * EpisodeGridRowsPerPage +
+        EpisodeGridSpacing * (EpisodeGridRowsPerPage - 1)
+
+    BoxWithConstraints(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp),
+    ) {
+        // 横向优先填满：列数按可用宽度自适应（手机约 5 列，平板更宽则更多），纵向最多 3 行
+        val columns = ((maxWidth + EpisodeGridSpacing) /
+            (EpisodeGridMinCardWidth + EpisodeGridSpacing) + 0.01f)
+            .toInt()
+            .coerceAtLeast(1)
+        val visible = episodes.take(columns * EpisodeGridRowsPerPage)
+        // 总集数不足一行时把卡片拉宽铺满整屏，避免一两个小按钮挤在角落
+        val perRow = minOf(columns, visible.size)
+        // 多扣一个间距作余量：正好铺满时浮点误差会把末尾一张挤到下一行
+        val cardWidth = if (perRow == 1) {
+            maxWidth
+        } else {
+            (maxWidth - EpisodeGridSpacing * perRow) / perRow
+        }
+
+        val scrollState = rememberScrollState()
+        var prevReverseSort by remember { mutableStateOf(reverseSort) }
+        LaunchedEffect(playIndex, currentFlag, visible.size, reverseSort, columns) {
+            if (reverseSort != prevReverseSort) {
+                prevReverseSort = reverseSort
+                scrollState.scrollTo(0)
             } else if (playIndex >= 0) {
-                listState.scrollToItem(minOf(playIndex, episodes.size - 1))
+                val row = minOf(playIndex, visible.lastIndex) / columns
+                scrollState.scrollTo(((EpisodeGridChipHeight + EpisodeGridSpacing) * row).value.toInt())
             }
         }
-        LazyRow(
-            state = listState,
-            contentPadding = PaddingValues(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.spacedBy(10.dp),
+
+        FlowRow(
+            modifier = Modifier
+                .heightIn(max = maxGridHeight)
+                .verticalScroll(scrollState),
+            horizontalArrangement = Arrangement.spacedBy(EpisodeGridSpacing),
+            verticalArrangement = Arrangement.spacedBy(EpisodeGridSpacing),
         ) {
-            itemsIndexed(episodes) { index, ep ->
-                if (thumbnails) {
-                    EpisodeCard(
-                        name = ep.name ?: (index + 1).toString(),
-                        episodeNumber = episodeNumbers.getOrNull(index)?.takeIf { it > 0 } ?: (index + 1),
-                        episode = episodeMeta?.getOrNull(index),
-                        selected = index == playIndex,
-                        onClick = { vm.onEpisodeClick(index) },
-                    )
-                } else {
-                    EpisodeNameCard(
-                        name = ep.name ?: (index + 1).toString(),
-                        selected = index == playIndex,
-                        onClick = { vm.onEpisodeClick(index) },
-                        modifier = Modifier.fillParentMaxWidth(),
-                    )
-                }
+            visible.forEachIndexed { index, ep ->
+                EpisodeNumberCard(
+                    name = ep.name ?: (index + 1).toString(),
+                    selected = index == playIndex,
+                    onClick = { onClick(index) },
+                    modifier = Modifier.width(cardWidth),
+                )
             }
         }
     }
@@ -258,15 +354,16 @@ private fun EpisodeCard(
 }
 
 @Composable
-private fun EpisodeNameCard(
+private fun EpisodeNumberCard(
     name: String,
     selected: Boolean,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    val shape = RoundedCornerShape(16.dp)
+    val shape = RoundedCornerShape(10.dp)
     Box(
         modifier = modifier
+            .height(EpisodeGridChipHeight)
             .detailGlass(shape)
             .then(
                 if (selected) {
@@ -276,7 +373,7 @@ private fun EpisodeNameCard(
                 },
             )
             .clickable(onClick = onClick)
-            .padding(horizontal = 14.dp, vertical = 12.dp),
+            .padding(horizontal = 4.dp),
         contentAlignment = Alignment.Center,
     ) {
         Text(
@@ -288,9 +385,10 @@ private fun EpisodeNameCard(
             } else {
                 MaterialTheme.colorScheme.onSurface
             },
-            maxLines = Int.MAX_VALUE,
-            softWrap = true,
+            maxLines = 1,
+            softWrap = false,
             textAlign = TextAlign.Center,
+            overflow = TextOverflow.Ellipsis,
         )
     }
 }
