@@ -259,7 +259,6 @@ open class BasePlayerView @JvmOverloads constructor(
         if (!isMute()) {
             audioFocusHelper?.requestFocus()
         }
-        playerFrame.keepScreenOn = true
     }
 
     open fun pause() {
@@ -268,7 +267,6 @@ open class BasePlayerView @JvmOverloads constructor(
         if (!isMute()) {
             audioFocusHelper?.abandonFocus()
         }
-        playerFrame.keepScreenOn = false
     }
 
     open fun resume() {
@@ -283,7 +281,6 @@ open class BasePlayerView @JvmOverloads constructor(
         if (!isMute()) {
             audioFocusHelper?.requestFocus()
         }
-        playerFrame.keepScreenOn = true
     }
 
     open fun stopPlaybackKeepPlayer() {
@@ -308,11 +305,12 @@ open class BasePlayerView @JvmOverloads constructor(
                 render.release()
             }
             activeRenderView = null
-            playerFrame.keepScreenOn = false
             saveProgress()
             playbackPosition = 0
             reportPlayState()
         }
+        // release 后内核已置空，state 归 IDLE；确保常亮位被清掉（不依赖上面的条件分支）
+        syncKeepScreenOn(PlayState.IDLE)
         videoSizePx[0] = 0
         videoSizePx[1] = 0
     }
@@ -374,12 +372,8 @@ open class BasePlayerView @JvmOverloads constructor(
 
                 KernelPlayer.MEDIA_INFO_BUFFERING_END -> reportPlayState()
 
-                KernelPlayer.MEDIA_INFO_RENDERING_START -> {
-                    reportPlayState()
-                    if (kernelPlayer?.playState == PlayState.PLAYING) {
-                        playerFrame.keepScreenOn = true
-                    }
-                }
+                // 常亮由 reportPlayState() 统一驱动，不再在此单独置位
+                KernelPlayer.MEDIA_INFO_RENDERING_START -> reportPlayState()
 
                 KernelPlayer.MEDIA_INFO_VIDEO_ROTATION_CHANGED ->
                     activeRenderView?.setVideoRotation(extra)
@@ -387,15 +381,15 @@ open class BasePlayerView @JvmOverloads constructor(
         }
 
         override fun onError() {
-            playerFrame.keepScreenOn = false
             reportPlayState()
+            syncKeepScreenOn(PlayState.ERROR)
         }
 
         override fun onCompletion() {
-            playerFrame.keepScreenOn = false
             playbackPosition = 0
             progressSinkRef?.saveProgress(progressKey(), 0L)
             reportPlayState()
+            syncKeepScreenOn(PlayState.COMPLETED)
         }
 
         override fun onVideoSizeChanged(width: Int, height: Int) {
@@ -556,8 +550,24 @@ open class BasePlayerView @JvmOverloads constructor(
     private fun dispatchPlayState(playState: PlayState) {
         lastReportedPlayState = playState
         playController?.setPlayState(playState)
+        syncKeepScreenOn(playState)
         if (!_playStateFlow.tryEmit(playState)) {
             AppLog.e("echo-player playState-flow-drop: " + playState)
+        }
+    }
+
+    /**
+     * 屏幕常亮的唯一真源：由播放状态驱动。
+     *
+     * 只要处于“加载中或播放中”（PREPARING 起），就保持常亮——避免首播/缓冲
+     * 阶段等待 MEDIA_INFO_RENDERING_START 期间超过系统超时而熄屏。
+     * 暂停、完成、出错、空闲时不常亮。
+     */
+    private fun syncKeepScreenOn(state: PlayState) {
+        playerFrame.keepScreenOn = when (state) {
+            PlayState.PREPARING, PlayState.PREPARED, PlayState.PLAYING,
+            PlayState.BUFFERING, PlayState.BUFFERED -> true
+            else -> false
         }
     }
 

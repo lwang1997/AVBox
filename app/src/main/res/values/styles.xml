@@ -13,7 +13,8 @@
         <item name="windowActionBar">false</item>
         <item name="android:windowContentOverlay">@null</item>
         <item name="windowNoTitle">true</item>
-        <item name="android:keepScreenOn">true</item>
+        <!-- 屏幕常亮由 BasePlayerView 按播放状态动态控制，仅播放视频期间保持 -->
+        <item name="android:keepScreenOn">false</item>
         <item name="android:windowBackground">@color/window_background</item>
     </style>
 
