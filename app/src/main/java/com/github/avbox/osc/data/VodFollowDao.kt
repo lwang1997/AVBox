@@ -23,6 +23,9 @@ interface VodFollowDao {
     @Query("select * from vodFollow")
     suspend fun getAllRaw(): List<VodFollow>
 
+    @Query("update vodFollow set `tmdbInfo`=:raw where `id`=:id")
+    suspend fun updateTmdbInfo(id: Int, raw: String)
+
     @Query("DELETE FROM vodFollow where `cid`=:cid and `sourceKey`=:sourceKey and `vodId`=:vodId")
     suspend fun deleteByKey(cid: String?, sourceKey: String?, vodId: String?)
 

@@ -344,6 +344,36 @@ class TmdbApiTest {
     }
 
     @Test
+    fun parseDetail_readsFollowUpdateFields() {
+        val json = """
+            {
+              "overview":"x",
+              "status":"Returning Series",
+              "number_of_episodes":36,
+              "last_episode_to_air":{"season_number":2,"episode_number":5,"name":"第五集","air_date":"2026-11-20"},
+              "next_episode_to_air":{"season_number":2,"episode_number":6,"name":"第六集","air_date":"2026-11-27"}
+            }
+        """.trimIndent()
+        val detail = TmdbApi.parseDetail(json)!!
+        assertEquals("Returning Series", detail.status)
+        assertEquals(36, detail.totalEpisodes)
+        assertEquals(2, detail.lastEpisode?.season)
+        assertEquals(5, detail.lastEpisode?.episode)
+        assertEquals("2026-11-20", detail.lastEpisode?.airDate)
+        assertEquals(6, detail.nextEpisode?.episode)
+        assertEquals("2026-11-27", detail.nextEpisode?.airDate)
+    }
+
+    @Test
+    fun parseDetail_followUpdateFieldsDefaultWhenMissing() {
+        val detail = TmdbApi.parseDetail("""{"overview":"x"}""")!!
+        assertNull(detail.status)
+        assertEquals(0, detail.totalEpisodes)
+        assertNull(detail.lastEpisode)
+        assertNull(detail.nextEpisode)
+    }
+
+    @Test
     fun parsePerson_readsProfileFields() {
         val json = """
             {

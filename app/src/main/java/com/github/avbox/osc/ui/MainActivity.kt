@@ -6,6 +6,7 @@ import com.github.avbox.osc.ui.theme.enableTransparentEdgeToEdge
 import androidx.compose.ui.platform.ComposeView
 import androidx.core.view.WindowCompat
 import com.github.avbox.osc.R
+import com.github.avbox.osc.api.FollowTmdbRefresh
 import com.github.avbox.osc.ui.base.BaseActivity
 import com.github.avbox.osc.player.PlaybackService
 import com.github.avbox.osc.sync.AutoSync
@@ -38,6 +39,7 @@ class MainActivity : BaseActivity() {
         applyStatusBarAppearance()
         PlaybackService.prewarm(this, PREWARM_ON_RESUME_DELAY_MS)
         AutoSync.onResume()
+        FollowTmdbRefresh.onResume()
     }
 
     override fun init() {

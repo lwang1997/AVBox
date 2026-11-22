@@ -169,6 +169,7 @@ class KVKeySpec : KVDecoder.TypeRegistry {
             register(KVKeys.BOOT_LOADING_COUNT, 0L)
             register(KVKeys.BOOT_LAST_ATTEMPT_AT, 0L)
             register(KVKeys.BOOT_LOAD_START_ELAPSED, 0L)
+            register(KVKeys.FOLLOW_TMDB_LAST_REFRESH_AT, 0L)
             register(KVKeys.SUBSCRIBE_LIST, object : TypeToken<ArrayList<String>>() {
             })
             register(KVKeys.LIVE_SUBSCRIBE_LIST, object : TypeToken<ArrayList<String>>() {

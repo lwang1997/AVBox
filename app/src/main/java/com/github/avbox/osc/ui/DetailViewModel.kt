@@ -8,10 +8,12 @@ import com.github.avbox.osc.api.ApiConfig
 import com.github.avbox.osc.event.UiChange
 import com.github.avbox.osc.event.UiEvents
 import com.github.avbox.osc.bean.AbsXml
+import com.github.avbox.osc.bean.FollowTmdbInfo
 import com.github.avbox.osc.bean.Movie
 import com.github.avbox.osc.bean.VodInfo
 import com.github.avbox.osc.data.AppGraph
 import com.github.avbox.osc.data.EpisodeTotals
+import com.github.avbox.osc.data.FollowDays
 import com.github.avbox.osc.data.HistoryWriter
 import com.github.avbox.osc.data.VodFollow
 import com.github.avbox.osc.player.PlaybackService
@@ -97,6 +99,12 @@ class DetailViewModel : ViewModel(), TmdbPosterCache {
     private val _follow = MutableStateFlow<VodFollow?>(null)
     val follow = _follow.asStateFlow()
 
+    /** 打开追更设置时由 TMDB 播出日推导的预填建议。 */
+    data class FollowScheduleSuggestion(val days: Set<Int>, val fromTmdb: Boolean)
+
+    private val _followScheduleSuggestion = MutableStateFlow<FollowScheduleSuggestion?>(null)
+    val followScheduleSuggestion = _followScheduleSuggestion.asStateFlow()
+
     private val _tmdbDetail = MutableStateFlow<TmdbDetail?>(null)
     val tmdbDetail = _tmdbDetail.asStateFlow()
     private val _tmdbLogoPath = MutableStateFlow<String?>(null)
@@ -133,6 +141,39 @@ class DetailViewModel : ViewModel(), TmdbPosterCache {
                 if (tmdbDetailKey == key) _tmdbDetail.value = resolved
             }
         }
+    }
+
+    /** 追更弹窗打开时调用：用 TMDB 下一集/最近一集的播出日预填更新日。 */
+    fun requestFollowScheduleSuggestion() {
+        val info = vodInfo ?: return
+        _followScheduleSuggestion.value = null
+        viewModelScope.launch(Dispatchers.IO) {
+            // 已追剧条目直接用落库的 TMDB 快照，避免依赖详情加载时序和网络。
+            val stored = FollowTmdbInfo.decode(
+                AppGraph.followRepository.find(sourceKey, vodId)?.tmdbInfo,
+            )
+            var days = stored?.nextAirDate?.let(FollowDays::dayIndexOfAirDate)
+                ?: stored?.lastAirDate?.let(FollowDays::dayIndexOfAirDate)
+            if (days != null) {
+                _followScheduleSuggestion.value = FollowScheduleSuggestion(setOf(days), true)
+                return@launch
+            }
+            var detail = _tmdbDetail.value
+            // 旧缓存可能解码成非 null 但无播出信息的对象，需强制重拉一次。
+            if (FollowTmdbInfo.fromDetail(detail) == null) {
+                detail = TmdbPoster.refreshDetail(info.name, info.year, info.en) ?: detail
+                if (detail != null) withContext(Dispatchers.Main) { _tmdbDetail.value = detail }
+            }
+            days = detail?.nextEpisode?.airDate?.let(FollowDays::dayIndexOfAirDate)
+                ?: detail?.lastEpisode?.airDate?.let(FollowDays::dayIndexOfAirDate)
+            if (days != null) {
+                _followScheduleSuggestion.value = FollowScheduleSuggestion(setOf(days), true)
+            }
+        }
+    }
+
+    fun clearFollowScheduleSuggestion() {
+        _followScheduleSuggestion.value = null
     }
 
     fun clearTmdbLogo() {
@@ -1020,7 +1061,20 @@ class DetailViewModel : ViewModel(), TmdbPosterCache {
         val vid = vodId
         viewModelScope.launch(Dispatchers.IO) {
             try {
-                AppGraph.followRepository.upsert(key, info, days, hour)
+                var detail = _tmdbDetail.value
+                    ?: TmdbPoster.cachedDetail(info.name, info.year, info.en)
+                    ?: TmdbPoster.resolveDetail(info.name, info.year, info.en)
+                // 旧版本缓存的 TmdbDetail 没有更新信息字段，解码后 status/last/next 全空。
+                // 这时强制重拉一次，避免把空快照写进订阅。
+                if (FollowTmdbInfo.fromDetail(detail) == null) {
+                    detail = TmdbPoster.refreshDetail(info.name, info.year, info.en) ?: detail
+                }
+                val tmdbRaw = FollowTmdbInfo.fromDetail(
+                    detail,
+                    year = info.year,
+                    altName = info.en.orEmpty(),
+                )?.let { FollowTmdbInfo.encode(it) }.orEmpty()
+                AppGraph.followRepository.upsertWithTmdbInfo(key, info, days, hour, tmdbRaw)
                 val record = AppGraph.followRepository.find(key, vid)
                 withContext(Dispatchers.Main) { _follow.value = record }
             } catch (th: Throwable) {

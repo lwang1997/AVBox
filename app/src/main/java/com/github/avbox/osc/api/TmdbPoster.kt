@@ -225,6 +225,24 @@ object TmdbPoster {
         return null
     }
 
+    /** 强制重新拉取详情（清掉详情缓存），供追剧更新信息定时刷新使用。 */
+    suspend fun refreshDetail(name: String?, year: Int, altName: String? = null): TmdbDetail? {
+        if (!isActive()) return null
+        for (candidate in nameCandidates(name, altName)) {
+            val hits = ensureHits(candidate) ?: continue
+            val best = pickBestWithAlias(hits, candidate, year) ?: continue
+            val key = detailKey(best.mediaType, best.id)
+            synchronized(memory) { memory.remove(key) }
+            try {
+                KV.delete(key)
+            } catch (e: Exception) {
+                AppLog.e("TmdbPoster", e)
+            }
+            return ensureDetail(best.mediaType, best.id)
+        }
+        return null
+    }
+
     fun cachedEpisodeMeta(
         name: String?,
         episodeCount: Int,

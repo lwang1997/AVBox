@@ -29,8 +29,11 @@ import androidx.compose.material3.ContainedLoadingIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.pulltorefresh.pullToRefresh
+import androidx.compose.material3.pulltorefresh.rememberPullToRefreshState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -72,6 +75,7 @@ fun FollowingPage(
 
     val items by vm.items.collectAsStateWithLifecycle()
     val loading by vm.loading.collectAsStateWithLifecycle()
+    val refreshing by vm.refreshing.collectAsStateWithLifecycle()
     val selectedDay by vm.selectedDay.collectAsStateWithLifecycle()
     val editMode by vm.editMode.collectAsStateWithLifecycle()
     val selected by vm.selected.collectAsStateWithLifecycle()
@@ -80,6 +84,11 @@ fun FollowingPage(
     val today by vm.today.collectAsStateWithLifecycle()
 
     val listState = rememberLazyGridState()
+    val topBarExpanded = remember { mutableStateOf(true) }
+    val atTop by remember {
+        derivedStateOf { !listState.canScrollBackward && topBarExpanded.value }
+    }
+    val pullState = rememberPullToRefreshState()
     val scope = rememberCoroutineScope()
     var deleteDialog by remember { mutableStateOf(false) }
 
@@ -94,6 +103,7 @@ fun FollowingPage(
 
     AppTopBarScaffold(
         topBarStartInset = navStart,
+        topBarExpandedState = topBarExpanded,
         titleContent = {
             Text(
                 text = stringResource(R.string.tab_following),
@@ -138,7 +148,8 @@ fun FollowingPage(
             }
         },
     ) { topPad, _ ->
-        Column(modifier = Modifier.fillMaxSize()) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            Column(modifier = Modifier.fillMaxSize()) {
             if (items.isNotEmpty()) {
                 WeekdayFilterBar(
                     topPad = topPad,
@@ -200,7 +211,14 @@ fun FollowingPage(
                         LazyVerticalGrid(
                             state = listState,
                             columns = GridCells.Fixed(columns),
-                            modifier = Modifier.fillMaxSize(),
+                            modifier = Modifier
+                                .fillMaxSize()
+                                .pullToRefresh(
+                                    isRefreshing = refreshing,
+                                    state = pullState,
+                                    enabled = atTop,
+                                    onRefresh = { vm.refreshFromPull() },
+                                ),
                             contentPadding = PaddingValues(
                                 start = 16.dp + navStart,
                                 end = 16.dp,
@@ -264,6 +282,13 @@ fun FollowingPage(
                     }
                 }
             }
+            }
+            HomePullRefreshIndicator(
+                state = pullState,
+                isRefreshing = refreshing,
+                topPadding = 0.dp,
+                modifier = Modifier.align(Alignment.TopCenter),
+            )
         }
     }
 

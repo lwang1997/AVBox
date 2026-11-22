@@ -32,9 +32,12 @@ import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.MutableState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
@@ -62,12 +65,20 @@ fun AppTopBarScaffold(
     collapseEnabled: Boolean = true,
     topBarStartInset: Dp = 0.dp,
     topScrimEnabled: Boolean = true,
+    /** 顶栏是否完全展开；供内容区判断下拉刷新是否应接管手势。 */
+    topBarExpandedState: MutableState<Boolean>? = null,
     content: @Composable androidx.compose.foundation.layout.BoxScope.(topPadding: androidx.compose.ui.unit.Dp, bottomPadding: androidx.compose.ui.unit.Dp) -> Unit,
 ) {
     val scrollBehavior = if (collapseEnabled) {
         TopAppBarDefaults.exitUntilCollapsedScrollBehavior()
     } else {
         TopAppBarDefaults.pinnedScrollBehavior()
+    }
+    if (topBarExpandedState != null) {
+        LaunchedEffect(scrollBehavior.state) {
+            snapshotFlow { scrollBehavior.state.collapsedFraction < 0.02f }
+                .collect { topBarExpandedState.value = it }
+        }
     }
     val glassConfig = LiquidGlassState.config
     val glassEnabled = glassConfig.controlsEnabled &&

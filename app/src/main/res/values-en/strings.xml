@@ -219,6 +219,7 @@
     <string name="weekday_sat">Sat</string>
     <string name="weekday_sun">Sun</string>
     <string name="follow_reminder_title">Update log</string>
+    <string name="follow_autofill_hint">Pre-filled from the TMDB air date — edit as needed</string>
     <string name="follow_update_day">Update days</string>
     <string name="follow_reminder_time">Update time</string>
     <string name="follow_summary">Every %1$s at %2$s</string>
@@ -267,6 +268,15 @@
     <string name="following_update_today_time">Updates today at %1$s</string>
     <string name="following_not_watched">Not watched yet</string>
     <string name="following_watched">Already watched</string>
+    <string name="following_tmdb_season_episode">S%1$dE%2$d</string>
+    <string name="following_tmdb_last">Up to %1$s</string>
+    <string name="following_tmdb_next">Next %1$s</string>
+    <string name="following_tmdb_total">%1$d eps</string>
+    <string name="following_tmdb_status_returning">Returning</string>
+    <string name="following_tmdb_status_ended">Ended</string>
+    <string name="following_tmdb_status_canceled">Canceled</string>
+    <string name="following_tmdb_status_planned">Planned</string>
+    <string name="following_tmdb_status_production">In production</string>
     <string name="following_delete_selected_message">Remove %1$d selected shows from following?</string>
     <string name="toast_follow_saved">Added to following</string>
     <string name="collect_clear_message">This will delete all favorites and cannot be undone</string>

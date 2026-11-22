@@ -32,7 +32,7 @@ object SyncSnapshot {
             CollectEntry(it.cid, it.sourceKey, it.vodId, it.updateTime, it.name, it.pic)
         }
         val follow = db.getVodFollowDao().getAllRaw().map {
-            FollowEntry(it.cid, it.sourceKey, it.vodId, it.addedTime, it.name, it.pic, it.updateDays, it.updateHour)
+            FollowEntry(it.cid, it.sourceKey, it.vodId, it.addedTime, it.name, it.pic, it.updateDays, it.updateHour, it.tmdbInfo)
         }
 
         val progress = ArrayList<ProgressEntry>()
@@ -119,6 +119,7 @@ object SyncSnapshot {
             record.pic = e.pic
             record.updateDays = e.updateDays
             record.updateHour = e.updateHour
+            record.tmdbInfo = e.tmdbInfo
             followDao.insert(record)
         }
 

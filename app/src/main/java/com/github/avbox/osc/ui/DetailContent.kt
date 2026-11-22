@@ -63,8 +63,14 @@ internal fun DetailContent(
     val playIndex = info.playIndex
     val collected by vm.collected.collectAsState()
     val followRecord by vm.follow.collectAsState()
+    val followSuggestion by vm.followScheduleSuggestion.collectAsState()
     val description = remember(info.des) { removeHtmlTag(info.des) }
     var followScheduleOpen by rememberSaveable { mutableStateOf(false) }
+    val saveFollowAndClose: (Set<Int>, Int) -> Unit = { days, hour ->
+        vm.saveFollow(days, hour)
+        followScheduleOpen = false
+        vm.clearFollowScheduleSuggestion()
+    }
 
     val currentSource = ApiConfig.get().getSource(vm.firstsourceKey)
     val displaySourceName = currentSource?.name ?: vm.firstsourceKey
@@ -95,7 +101,10 @@ internal fun DetailContent(
                 onMusic = { activity.openMusicPlayer() },
                 onCast = { activity.openCast() },
                 onCollect = { vm.toggleCollect() },
-                onFollow = { followScheduleOpen = true },
+                onFollow = {
+                    vm.requestFollowScheduleSuggestion()
+                    followScheduleOpen = true
+                },
                 vm = vm,
                 rollPaused = heroRollPaused,
             )
@@ -170,8 +179,13 @@ internal fun DetailContent(
             initialDays = followRecord?.let { FollowDays.decode(it.updateDays) }?.takeIf { it.isNotEmpty() }
                 ?: setOf(0),
             initialHour = followRecord?.updateHour ?: 21,
-            onDismissRequest = { followScheduleOpen = false },
-            onSave = { days, hour -> vm.saveFollow(days, hour) },
+            autoDays = followSuggestion?.days,
+            showAutofillHint = followSuggestion?.fromTmdb == true,
+            onDismissRequest = {
+                followScheduleOpen = false
+                vm.clearFollowScheduleSuggestion()
+            },
+            onSave = saveFollowAndClose,
         )
     }
 }

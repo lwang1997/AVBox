@@ -42,4 +42,9 @@ class VodFollow : Serializable {
     @JvmField
     @ColumnInfo(name = "updateHour")
     var updateHour: Int = 21
+
+    /** JSON snapshot of FollowTmdbInfo; empty when TMDB has no update info. */
+    @JvmField
+    @ColumnInfo(name = "tmdbInfo")
+    var tmdbInfo: String = ""
 }

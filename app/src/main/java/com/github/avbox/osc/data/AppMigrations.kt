@@ -11,3 +11,9 @@ val MIGRATION_1_2 = object : Migration(1, 2) {
         connection.execSQL(VodFollowCreateSql)
     }
 }
+
+val MIGRATION_2_3 = object : Migration(2, 3) {
+    override suspend fun migrate(connection: SQLiteConnection) {
+        connection.execSQL("ALTER TABLE `vodFollow` ADD COLUMN `tmdbInfo` TEXT NOT NULL DEFAULT ''")
+    }
+}

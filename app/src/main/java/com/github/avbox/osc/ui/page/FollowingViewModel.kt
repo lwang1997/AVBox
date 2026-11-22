@@ -1,6 +1,7 @@
 package com.github.avbox.osc.ui.page
 
 import com.github.avbox.osc.api.AppBootstrap
+import com.github.avbox.osc.api.FollowTmdbRefresh
 import com.github.avbox.osc.api.TmdbPoster
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
@@ -41,6 +42,8 @@ internal class FollowingViewModel(
 
     private val _loading = MutableStateFlow(true)
     val loading = _loading.asStateFlow()
+    private val _refreshing = MutableStateFlow(false)
+    val refreshing = _refreshing.asStateFlow()
     private val _items = MutableStateFlow<List<FollowEntry>>(emptyList())
     val items = _items.asStateFlow()
     private val entries = MutableStateFlow<List<FollowEntry>>(emptyList())
@@ -105,6 +108,17 @@ internal class FollowingViewModel(
     fun refresh() {
         _today.value = FollowDays.todayIndex()
         historyTick.value++
+    }
+
+    /** 下拉刷新：强制重拉 TMDB 更新信息，完成后重载本地列表。 */
+    fun refreshFromPull() {
+        if (_refreshing.value) return
+        _refreshing.value = true
+        refresh()
+        FollowTmdbRefresh.refreshNow {
+            refresh()
+            _refreshing.value = false
+        }
     }
 
     private suspend fun resolveHistory(follow: VodFollow): VodInfo? =

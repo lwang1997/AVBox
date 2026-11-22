@@ -11,7 +11,21 @@ interface FollowRepository {
 
     fun observeAll(): Flow<List<VodFollow>>
 
+    suspend fun getAllRaw(): List<VodFollow>
+
     suspend fun upsert(sourceKey: String?, vodInfo: VodInfo, days: Set<Int>, hour: Int)
+
+    /** 与 [upsert] 相同，但写入 TMDB 更新信息快照。 */
+    suspend fun upsertWithTmdbInfo(
+        sourceKey: String?,
+        vodInfo: VodInfo,
+        days: Set<Int>,
+        hour: Int,
+        tmdbInfo: String,
+    )
+
+    /** 更新单条追剧的 TMDB 快照，用于后台刷新。 */
+    suspend fun updateTmdbInfo(id: Int, raw: String)
 
     suspend fun deleteSelected(ids: List<Int>)
 }
@@ -27,7 +41,29 @@ internal class RoomFollowRepository(
 
     override fun observeAll(): Flow<List<VodFollow>> = follows().observeAll()
 
+    override suspend fun getAllRaw(): List<VodFollow> = follows().getAllRaw()
+
     override suspend fun upsert(sourceKey: String?, vodInfo: VodInfo, days: Set<Int>, hour: Int) {
+        upsertInternal(sourceKey, vodInfo, days, hour, null)
+    }
+
+    override suspend fun upsertWithTmdbInfo(
+        sourceKey: String?,
+        vodInfo: VodInfo,
+        days: Set<Int>,
+        hour: Int,
+        tmdbInfo: String,
+    ) {
+        upsertInternal(sourceKey, vodInfo, days, hour, tmdbInfo)
+    }
+
+    private suspend fun upsertInternal(
+        sourceKey: String?,
+        vodInfo: VodInfo,
+        days: Set<Int>,
+        hour: Int,
+        tmdbInfo: String?,
+    ) {
         val cid = CurrentSubscription.cid()
         val dao = follows()
         val record = dao.getVodFollow(cid, sourceKey, vodInfo.id) ?: VodFollow()
@@ -41,7 +77,12 @@ internal class RoomFollowRepository(
         record.pic = vodInfo.pic
         record.updateDays = FollowDays.encode(days)
         record.updateHour = hour.coerceIn(0, 23)
+        if (tmdbInfo != null) record.tmdbInfo = tmdbInfo
         dao.insert(record)
+    }
+
+    override suspend fun updateTmdbInfo(id: Int, raw: String) {
+        follows().updateTmdbInfo(id, raw)
     }
 
     override suspend fun deleteSelected(ids: List<Int>) {

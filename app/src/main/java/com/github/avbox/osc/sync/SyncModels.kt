@@ -59,6 +59,8 @@ data class FollowEntry(
     val pic: String? = null,
     val updateDays: String = "",
     val updateHour: Int = 21,
+    /** JSON snapshot of FollowTmdbInfo */
+    val tmdbInfo: String = "",
 )
 
 data class ProgressEntry(

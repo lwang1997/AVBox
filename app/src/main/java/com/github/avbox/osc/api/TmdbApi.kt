@@ -1,5 +1,6 @@
 package com.github.avbox.osc.api
 
+import com.github.avbox.osc.bean.TmdbAirEpisode
 import com.github.avbox.osc.bean.TmdbCastMember
 import com.github.avbox.osc.bean.TmdbDetail
 import com.github.avbox.osc.bean.TmdbEpisode
@@ -288,6 +289,22 @@ object TmdbApi {
                 val number = item.intOrNull(SEASON_NUMBER_FIELD) ?: return@mapNotNull null
                 TmdbSeason(number, item.intOrNull(EPISODE_COUNT_FIELD) ?: 0)
             }.orEmpty(),
+            status = root.stringOrNull("status"),
+            totalEpisodes = root.intOrNull("number_of_episodes") ?: 0,
+            lastEpisode = parseAirEpisode(root, "last_episode_to_air"),
+            nextEpisode = parseAirEpisode(root, "next_episode_to_air"),
+        )
+    }
+
+    private fun parseAirEpisode(root: JsonObject, key: String): TmdbAirEpisode? {
+        val item = root.get(key)?.takeIf { it.isJsonObject }?.asJsonObject ?: return null
+        val season = item.intOrNull("season_number") ?: return null
+        val episode = item.intOrNull("episode_number") ?: return null
+        return TmdbAirEpisode(
+            season = season,
+            episode = episode,
+            name = item.stringOrNull("name").orEmpty(),
+            airDate = item.stringOrNull("air_date").orEmpty(),
         )
     }
 

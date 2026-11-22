@@ -149,4 +149,7 @@ object KVKeys {
     const val SYNC_ITEM_PROGRESS = "sync_item_progress"
     const val SYNC_DEVICE_ID = "sync_device_id"
     const val SYNC_LAST_SYNC_AT = "sync_last_sync_at"
+
+    // 追剧 TMDB 更新信息自动刷新
+    const val FOLLOW_TMDB_LAST_REFRESH_AT = "follow_tmdb_last_refresh_at"
 }

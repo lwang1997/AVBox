@@ -35,4 +35,12 @@ class FollowDaysTest {
         assertTrue(index in 0..6)
         assertEquals(java.time.LocalDate.now().dayOfWeek.value - 1, index)
     }
+
+    @Test
+    fun dayIndexOfAirDate_parsesTmdbAirDate() {
+        assertEquals(0, FollowDays.dayIndexOfAirDate("2026-11-23")) // Monday
+        assertEquals(5, FollowDays.dayIndexOfAirDate("2026-11-28")) // Saturday
+        assertEquals(null, FollowDays.dayIndexOfAirDate(""))
+        assertEquals(null, FollowDays.dayIndexOfAirDate("not-a-date"))
+    }
 }

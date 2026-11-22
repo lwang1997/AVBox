@@ -25,6 +25,22 @@ data class TmdbDetail(
     val genres: List<String>,
     val cast: List<TmdbCastMember>,
     val seasons: List<TmdbSeason>,
+    /** TMDB status string, e.g. "Returning Series" / "Ended". Nullable for old cached JSON. */
+    val status: String? = null,
+    /** Total episode count reported by TMDB; 0 when unknown/movie. */
+    val totalEpisodes: Int = 0,
+    /** Most recently aired episode (TV only). Nullable for old cached JSON. */
+    val lastEpisode: TmdbAirEpisode? = null,
+    /** Next episode to air (TV only). Nullable for old cached JSON. */
+    val nextEpisode: TmdbAirEpisode? = null,
+)
+
+/** Lightweight episode reference used for follow update info. */
+data class TmdbAirEpisode(
+    val season: Int = 0,
+    val episode: Int = 0,
+    val name: String = "",
+    val airDate: String = "",
 )
 
 data class TmdbSeason(

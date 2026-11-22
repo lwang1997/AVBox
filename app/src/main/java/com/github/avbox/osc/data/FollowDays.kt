@@ -20,4 +20,10 @@ object FollowDays {
             .toSet()
 
     fun todayIndex(): Int = LocalDate.now().dayOfWeek.value - 1
+
+    /** 把 TMDB 的 air_date（yyyy-MM-dd）转成周一=0 的索引；非法日期返回 null。 */
+    fun dayIndexOfAirDate(value: String?): Int? {
+        if (value.isNullOrBlank()) return null
+        return runCatching { LocalDate.parse(value.trim()).dayOfWeek.value - 1 }.getOrNull()
+    }
 }

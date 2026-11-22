@@ -20,6 +20,7 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -44,13 +45,20 @@ private const val ReminderSheetHeightFraction = 0.6f
 fun FollowReminderSheet(
     initialDays: Set<Int>,
     initialHour: Int,
+    autoDays: Set<Int>? = null,
+    showAutofillHint: Boolean = false,
     onDismissRequest: () -> Unit,
     onSave: (days: Set<Int>, hour: Int) -> Unit,
 ) {
     val dismissAnimated = LocalSheetDismiss.current
     var selectedDays by rememberSaveable { mutableStateOf(initialDays) }
     var selectedHour by rememberSaveable { mutableStateOf(initialHour) }
+    var userEditedDays by rememberSaveable { mutableStateOf(false) }
     var timeMenuOpen by rememberSaveable { mutableStateOf(false) }
+
+    LaunchedEffect(autoDays) {
+        if (!userEditedDays && !autoDays.isNullOrEmpty()) selectedDays = autoDays
+    }
 
     val separator = stringResource(R.string.follow_days_separator)
     val timeText = formatReminderTime(selectedHour)
@@ -84,6 +92,16 @@ fun FollowReminderSheet(
             }
         },
     ) {
+        if (showAutofillHint) {
+            Text(
+                text = stringResource(R.string.follow_autofill_hint),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = 20.dp, end = 20.dp, top = 12.dp),
+            )
+        }
         ReminderSectionTitle(titleRes = R.string.follow_update_day)
         Row(
             horizontalArrangement = Arrangement.spacedBy(6.dp),
@@ -96,6 +114,7 @@ fun FollowReminderSheet(
                     label = stringResource(nameRes),
                     selected = index in selectedDays,
                     onClick = {
+                        userEditedDays = true
                         selectedDays = if (index in selectedDays) {
                             if (selectedDays.size > 1) selectedDays - index else selectedDays
                         } else {

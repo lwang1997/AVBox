@@ -44,6 +44,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.github.avbox.osc.R
+import com.github.avbox.osc.bean.FollowTmdbInfo
 import com.github.avbox.osc.bean.VodInfo
 import com.github.avbox.osc.data.EpisodeTotals
 import com.github.avbox.osc.data.FollowDays
@@ -55,6 +56,7 @@ import com.github.avbox.osc.ui.components.formatReminderTime
 import com.github.avbox.osc.ui.components.joinedDaysText
 import com.github.avbox.osc.ui.theme.SuccessGreen
 import com.github.avbox.osc.ui.theme.cardContainer
+import java.util.Locale
 import kotlin.math.roundToInt
 
 private val ScheduleIconSize = 16.dp
@@ -66,6 +68,42 @@ private val FollowCardCorner = 22.dp
 private val FollowPosterCorner = 12.dp
 
 private val FollowStatusDotSize = 10.dp
+
+private const val TmdbInfoSeparator = " · "
+
+@Composable
+private fun followTmdbText(info: FollowTmdbInfo): String? {
+    val parts = ArrayList<String>(4)
+    val status = when (info.status.lowercase(Locale.ROOT).trim()) {
+        "returning series" -> stringResource(R.string.following_tmdb_status_returning)
+        "ended" -> stringResource(R.string.following_tmdb_status_ended)
+        "canceled" -> stringResource(R.string.following_tmdb_status_canceled)
+        "planned" -> stringResource(R.string.following_tmdb_status_planned)
+        "in production" -> stringResource(R.string.following_tmdb_status_production)
+        else -> info.status.trim()
+    }
+    if (status.isNotEmpty()) parts.add(status)
+    if (info.lastEpisode > 0) {
+        val ep = stringResource(
+            R.string.following_tmdb_season_episode,
+            info.lastSeason,
+            info.lastEpisode,
+        )
+        parts.add(stringResource(R.string.following_tmdb_last, ep))
+    }
+    if (info.nextEpisode > 0) {
+        val ep = stringResource(
+            R.string.following_tmdb_season_episode,
+            info.nextSeason,
+            info.nextEpisode,
+        )
+        parts.add(stringResource(R.string.following_tmdb_next, ep))
+    }
+    if (info.totalEpisodes > 0) {
+        parts.add(stringResource(R.string.following_tmdb_total, info.totalEpisodes))
+    }
+    return parts.joinToString(TmdbInfoSeparator).takeIf { it.isNotEmpty() }
+}
 
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -206,6 +244,17 @@ internal fun FollowRow(
                             maxLines = 1,
                         )
                     }
+                }
+                val tmdbInfo = remember(follow.tmdbInfo) { FollowTmdbInfo.decode(follow.tmdbInfo) }
+                val tmdbText = tmdbInfo?.let { followTmdbText(it) }
+                if (tmdbText != null) {
+                    Text(
+                        text = tmdbText,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
                 }
                 val eps = followEpisodeTotal(history, totalEpisodes)
                 val episodeFraction = eps?.let { total ->
