@@ -35,6 +35,7 @@ import com.github.avbox.osc.R
 import com.github.avbox.osc.api.ApiConfig
 import com.github.avbox.osc.data.FollowDays
 import com.github.avbox.osc.ui.components.FollowReminderSheet
+import com.github.avbox.osc.ui.page.jumpToSearch
 
 internal val HeroScrollFadeDistance = 300.dp
 
@@ -89,6 +90,7 @@ internal fun DetailContent(
                 onPosterPic = onPosterPic,
                 onSeed = onSeed,
                 onBack = { activity.onBackPressedDispatcher.onBackPressed() },
+                onSearch = { activity.jumpToSearch(info.name.orEmpty()) },
                 onPlay = { vm.onPlayRequested(DetailPlaybackEntry.PlayCapsule) },
                 onMusic = { activity.openMusicPlayer() },
                 onCast = { activity.openCast() },
@@ -152,10 +154,6 @@ internal fun DetailContent(
                     }
                 }
             }
-        }
-
-        item(key = "sources") {
-            SourceSection(vm, currentSourceName = displaySourceName)
         }
 
         item(key = "tmdb_info") {

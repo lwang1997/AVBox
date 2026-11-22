@@ -310,16 +310,13 @@ fun DetailScreen(activity: DetailActivity, vm: DetailViewModel) {
                         }
 
                         is DetailViewModel.PageState.Empty -> {
-                            Column(modifier = Modifier.fillMaxSize()) {
-                                LoadStateBox(
-                                    state = LoadState.Empty,
-                                    emptyText = state.msg ?: stringResource(R.string.detail_empty_source),
-                                    errorText = "",
-                                    retryText = "",
-                                    modifier = Modifier.weight(1f),
-                                )
-                                SourceSection(vm, currentSourceName = null)
-                            }
+                            LoadStateBox(
+                                state = LoadState.Empty,
+                                emptyText = state.msg ?: stringResource(R.string.detail_empty_source),
+                                errorText = "",
+                                retryText = "",
+                                modifier = Modifier.fillMaxSize(),
+                            )
                         }
 
                         is DetailViewModel.PageState.Ready -> {

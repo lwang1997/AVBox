@@ -14,7 +14,6 @@ import com.github.avbox.osc.data.AppGraph
 import com.github.avbox.osc.data.EpisodeTotals
 import com.github.avbox.osc.data.HistoryWriter
 import com.github.avbox.osc.data.VodFollow
-import com.github.avbox.osc.net.SearchHelper
 import com.github.avbox.osc.player.PlaybackService
 import com.github.avbox.osc.player.PlaybackSession
 import com.github.avbox.osc.player.state.PlaybackSettingsState
@@ -34,15 +33,10 @@ import com.github.avbox.osc.util.AppLog
 import com.github.avbox.osc.util.LanguageManager
 import com.github.avbox.osc.sourcedata.Thunder
 import java.util.Locale
-import java.util.concurrent.ConcurrentHashMap
-import kotlinx.coroutines.CompletableDeferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.async
-import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.channels.BufferOverflow
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -58,10 +52,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.sync.Semaphore
-import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
-import kotlinx.coroutines.withTimeoutOrNull
 import com.github.avbox.osc.ui.components.toVodInfo
 
 class DetailViewModel : ViewModel(), TmdbPosterCache {
@@ -83,8 +74,6 @@ class DetailViewModel : ViewModel(), TmdbPosterCache {
         data class Empty(val msg: String? = null) : PageState
         data object Ready : PageState
     }
-
-    data class SourceChip(val key: String, val name: String)
 
     private val _pageState = MutableStateFlow<PageState>(PageState.Loading)
     val pageState = _pageState.asStateFlow()
@@ -292,10 +281,6 @@ class DetailViewModel : ViewModel(), TmdbPosterCache {
     val qualityOptions = _qualityOptions.asStateFlow()
     private val _qualitySelected = MutableStateFlow(0)
     val qualitySelected = _qualitySelected.asStateFlow()
-    private val _sourceChips = MutableStateFlow<List<SourceChip>>(emptyList())
-    val sourceChips = _sourceChips.asStateFlow()
-    private val _sourcesSearching = MutableStateFlow(false)
-    val sourcesSearching = _sourcesSearching.asStateFlow()
     private val _episodeSheet = MutableStateFlow(false)
     val episodeSheet = _episodeSheet.asStateFlow()
     private val _toastEvent = MutableSharedFlow<String>(
@@ -330,7 +315,6 @@ class DetailViewModel : ViewModel(), TmdbPosterCache {
 
     private val sourceViewModel = SourceViewModel()
     private val navStack = DetailNavStack()
-    private var searchJob: Job? = null
     private var detailBuildToken = 0
 
     private var detailRequestToken = 0
@@ -342,9 +326,6 @@ class DetailViewModel : ViewModel(), TmdbPosterCache {
     private val candidateKeys = HashSet<String>()
     private val triedKeys = HashSet<String>()
     private val usedSourceKeys = HashSet<String>()
-    private val semaphore = Semaphore(SOURCE_SEARCH_CONCURRENCY)
-    private val pendingSearchDone = ConcurrentHashMap<String, CompletableDeferred<Unit>>()
-    private val searchCaller = SourceViewModel()
     private var fallbackKeepCurrentDetail = false
     private var fallbackLoadingCandidate = false
     private var fallbackActive = false
@@ -366,17 +347,11 @@ class DetailViewModel : ViewModel(), TmdbPosterCache {
 
     private var switchSnapshot: SwitchSnapshot? = null
 
-    private var searchToken = 0
-    private var searchTitle = ""
-
     init {
         viewModelScope.launch {
             sourceViewModel.detailResult.flow.collect { data ->
                 if (DetailResponseGuard.isCurrent(detailRequestToken, data?.detailToken)) onDetailResult(data)
             }
-        }
-        viewModelScope.launch {
-            sourceViewModel.searchResult.flow.collect { onSearchResult(it) }
         }
         observeUiEvents()
         observeEngineState()
@@ -467,27 +442,19 @@ class DetailViewModel : ViewModel(), TmdbPosterCache {
         vodPicture = target.picture
         loadDetail(target.vodId, target.sourceKey)
         AppLog.i("echo-detail-open collect=$fromCollect key=$sourceKey id=$vodId")
-        if (vodName.isNotEmpty()) startSourceSearch()
     }
 
     private fun cancelInFlightContent() {
-        searchJob?.cancel()
-        searchJob = null
-        pendingSearchDone.values.forEach { it.complete(Unit) }
-        pendingSearchDone.clear()
         cancelDetailTimeout()
-        searchToken = SEARCH_SEQ.incrementAndGet()
     }
 
     private fun resetContentState() {
         publishVodInfo(null)
         switchSnapshot = null
         firstsourceKey = ""
-        searchTitle = ""
         manualLineSwitchPending = false
         _collected.value = false
         _follow.value = null
-        _sourcesSearching.value = false
         _qualityOptions.value = emptyList()
         _qualitySelected.value = 0
         _episodeSheet.value = false
@@ -660,7 +627,6 @@ class DetailViewModel : ViewModel(), TmdbPosterCache {
         if (vodId.isEmpty()) return
         detailRetryTarget = null
         loadDetail(vodId, sourceKey)
-        if (searchTitle.isNotEmpty() && !_sourcesSearching.value) startSourceSearch()
     }
 
     private fun onDetailUnavailable() {
@@ -669,7 +635,6 @@ class DetailViewModel : ViewModel(), TmdbPosterCache {
             loadNextFallbackCandidate()
             return
         }
-        if (vodName.isNotEmpty() && !_sourcesSearching.value) startSourceSearch()
         val staleSource = ApiConfig.get().getSource(sourceKey) == null
         if (!(staleSource && startFallbackIfNeeded(auto = true))) {
             if (!rollbackManualSwitch()) enterEmpty()
@@ -747,10 +712,6 @@ class DetailViewModel : ViewModel(), TmdbPosterCache {
                     info = info.copy(playIndex = info.playIndex.coerceIn(0, playingList.size - 1))
                 }
                 publishVodInfo(info)
-                if (searchTitle.isEmpty() && !info.name.isNullOrEmpty()) {
-                    searchTitle = info.name.orEmpty().trim()
-                    startSourceSearch()
-                }
                 vodName = detailVideo.name ?: vodName
                 if (!playingList.isNullOrEmpty()) switchSnapshot = null
                 _pageState.value = PageState.Ready
@@ -799,91 +760,6 @@ class DetailViewModel : ViewModel(), TmdbPosterCache {
         applyTarget(previous)
         if (!reason.isNullOrEmpty()) _toastEvent.tryEmit(reason)
         return true
-    }
-
-    private fun startSourceSearch() {
-        val title = searchTitle.ifEmpty { vodName.trim() }
-        if (title.isEmpty()) return
-        if (_sourcesSearching.value && searchTitle == title) return
-        searchTitle = title
-        searchToken = SEARCH_SEQ.incrementAndGet()
-        val myToken = searchToken
-        val tokenStr = "detail_$myToken"
-        val checked = SearchHelper.getSourcesForSearch()
-        val home = ApiConfig.get().homeSourceBean()
-        val sources = ApiConfig.get().getSourceBeanList()
-            .filter { it.isSearchable() && it.isQuickSearch() && (checked == null || checked.containsKey(it.key)) }
-            .sortedBy { it.key != home.key }
-        _sourcesSearching.value = sources.isNotEmpty()
-        if (sources.isEmpty()) return
-        searchJob = viewModelScope.launch {
-            coroutineScope {
-                sources.map { bean ->
-                    async {
-                        semaphore.withPermit {
-                            val done = CompletableDeferred<Unit>()
-                            pendingSearchDone.put(bean.key.orEmpty(), done)?.complete(Unit)
-                            try {
-                                withTimeoutOrNull(SOURCE_SEARCH_TIMEOUT_MS) {
-                                    searchCaller.getSearch(bean.key, title, tokenStr)
-                                    done.await()
-                                }
-                            } finally {
-                                pendingSearchDone.remove(bean.key)
-                            }
-                        }
-                    }
-                }.awaitAll()
-            }
-            if (tokenStr == currentTokenStr()) {
-                _sourcesSearching.value = false
-                if (fallbackActive && fallbackAutoSwitch && !fallbackLoadingCandidate) loadNextFallbackCandidate()
-            }
-        }
-    }
-
-    private fun onSearchResult(data: AbsXml?) {
-        val info = data ?: return
-        if (info.searchToken != currentTokenStr()) return
-        pendingSearchDone.remove(info.sourceKey)?.complete(Unit)
-        val videos = info.movie?.videoList.orEmpty()
-        val fresh = videos.filter {
-            !it.id.isNullOrEmpty() && it.name?.trim() == searchTitle
-                    && !usedSourceKeys.contains(it.sourceKey)
-                    && it.sourceKey != sourceKey
-        }.filter { candidateKeys.add(candidateKey(it)) }
-        if (fresh.isNotEmpty()) {
-            synchronized(fallbackCandidates) { fallbackCandidates.addAll(fresh) }
-            publishSourceChips()
-            if (fallbackActive && fallbackAutoSwitch && !fallbackLoadingCandidate) loadNextFallbackCandidate()
-        }
-    }
-
-    private fun currentTokenStr(): String = "detail_$searchToken"
-
-    private fun publishSourceChips() {
-        val candidates = synchronized(fallbackCandidates) { fallbackCandidates.toList() }
-        _sourceChips.value = candidates
-            .filter { !usedSourceKeys.contains(it.sourceKey) && it.sourceKey != sourceKey }
-            .map { video ->
-                val key = video.sourceKey.orEmpty()
-                SourceChip(key, ApiConfig.get().getSource(key)?.name ?: key)
-            }
-            .distinctBy { it.key }
-    }
-
-    fun candidateForKey(key: String): Movie.Video? =
-        synchronized(fallbackCandidates) { fallbackCandidates.firstOrNull { it.sourceKey == key } }
-
-    fun switchSource(video: Movie.Video) {
-        stopPlaybackForSwitch()
-        captureFallbackEpisode()
-        detailRetryTarget = null
-        usedSourceKeys.add(video.sourceKey.orEmpty())
-        vodName = video.name ?: vodName
-        vodPicture = video.pic ?: vodPicture
-        resetEngineState(keepChips = true)
-        loadDetail(video.id.orEmpty(), video.sourceKey.orEmpty())
     }
 
     private fun stopPlaybackForSwitch() {
@@ -943,7 +819,6 @@ class DetailViewModel : ViewModel(), TmdbPosterCache {
         if (title.isEmpty()) return false
         fallbackKeepCurrentDetail = fromLinesExhausted && vodInfo != null && !vodInfo?.seriesMap.isNullOrEmpty()
         captureFallbackEpisode()
-        searchTitle = title
         usedSourceKeys.add(sourceKey)
         fallbackActive = true
         fallbackAutoSwitch = auto
@@ -966,13 +841,11 @@ class DetailViewModel : ViewModel(), TmdbPosterCache {
             usedSourceKeys.add(video.sourceKey.orEmpty())
             vodName = video.name ?: vodName
             vodPicture = video.pic ?: vodPicture
-            publishSourceChips()
             scheduleDetailTimeout()
             loadDetailInternal(video.id.orEmpty(), video.sourceKey.orEmpty(), detailRequestToken)
             return
         }
-        publishSourceChips()
-        if (!_sourcesSearching.value) finishFallbackWithoutResult()
+        finishFallbackWithoutResult()
     }
 
     private fun isAutoSwitchable(key: String): Boolean {
@@ -1067,13 +940,11 @@ class DetailViewModel : ViewModel(), TmdbPosterCache {
             synchronized(fallbackCandidates) { fallbackCandidates.clear() }
             candidateKeys.clear()
         }
-        publishSourceChips()
     }
 
     fun destroyEngine() {
         cancelDetailTimeout()
         sourceViewModel.cancelDetail()
-        searchCaller.cancelSearch()
         Thunder.cancelPendingParse()
     }
 
@@ -1380,12 +1251,8 @@ class DetailViewModel : ViewModel(), TmdbPosterCache {
     }
 
     companion object {
-        private val SEARCH_SEQ = java.util.concurrent.atomic.AtomicInteger(0)
-
         private const val DETAIL_FALLBACK_DETAIL_TIMEOUT_MS = 6000L
         private const val DETAIL_RETRY_DELAY_MS = 700L
-        private const val SOURCE_SEARCH_TIMEOUT_MS = 30_000L
-        private const val SOURCE_SEARCH_CONCURRENCY = 6
 
         private const val SOURCE_EMPTY_MSG = "数据列表" // i18n: keep(源错误消息判据值,只比较不展示)
 

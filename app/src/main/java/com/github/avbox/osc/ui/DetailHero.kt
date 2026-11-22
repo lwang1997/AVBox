@@ -91,6 +91,7 @@ import com.github.avbox.osc.ui.components.PosterSize
 import com.github.avbox.osc.ui.components.PressMorphButtonShapes
 import com.github.avbox.osc.ui.components.TopBarActionBox
 import com.github.avbox.osc.ui.components.VodPoster
+import com.github.avbox.osc.ui.components.glassTopBarSurface
 import com.github.avbox.osc.ui.components.isRatingNote
 import com.github.avbox.osc.ui.components.pressScale
 import com.github.avbox.osc.ui.components.rememberHeroImageSizes
@@ -101,6 +102,7 @@ import com.github.avbox.osc.ui.theme.AppThemeState
 import com.github.avbox.osc.util.TmdbImages
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
+import com.kyant.capsule.ContinuousCapsule
 import java.util.Locale
 import kotlin.random.Random
 import kotlinx.coroutines.Dispatchers
@@ -217,6 +219,7 @@ internal fun DetailHero(
     onPosterPic: (String) -> Unit,
     onSeed: (Int?) -> Unit,
     onBack: () -> Unit,
+    onSearch: () -> Unit,
     onPlay: () -> Unit,
     onMusic: () -> Unit,
     onCast: () -> Unit,
@@ -265,6 +268,7 @@ internal fun DetailHero(
             DetailHeroTopActions(
                 collected = collected,
                 onBack = onBack,
+                onSearch = onSearch,
                 onCollect = onCollect,
                 fallbackColor = circleColor,
             )
@@ -353,6 +357,7 @@ internal fun DetailHero(
                 DetailHeroTopActions(
                     collected = collected,
                     onBack = onBack,
+                    onSearch = onSearch,
                     onCollect = onCollect,
                     fallbackColor = circleColor,
                 )
@@ -404,6 +409,7 @@ internal fun DetailHero(
 private fun DetailHeroTopActions(
     collected: Boolean,
     onBack: () -> Unit,
+    onSearch: () -> Unit,
     onCollect: () -> Unit,
     fallbackColor: Color,
 ) {
@@ -421,19 +427,47 @@ private fun DetailHeroTopActions(
             fallbackColor = fallbackColor,
         )
         Spacer(Modifier.weight(1f))
-        TopBarActionBox(
-            iconRes = if (collected) R.drawable.ic_tab_collect_filled else R.drawable.ic_tab_collect,
-            contentDescription = stringResource(
-                if (collected) R.string.detail_uncollect else R.string.detail_collect,
-            ),
-            onClick = onCollect,
-            fallbackColor = fallbackColor,
-            tint = if (collected) {
-                MaterialTheme.colorScheme.primary
-            } else {
-                MaterialTheme.colorScheme.onSurface
-            },
-        )
+        Row(
+            modifier = Modifier
+                .height(40.dp)
+                .glassTopBarSurface(ContinuousCapsule, fallbackColor),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clickable(onClick = onSearch),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_detail_search),
+                    contentDescription = stringResource(R.string.common_search),
+                    tint = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.size(22.dp),
+                )
+            }
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clickable(onClick = onCollect),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    painter = painterResource(
+                        if (collected) R.drawable.ic_tab_collect_filled else R.drawable.ic_tab_collect
+                    ),
+                    contentDescription = stringResource(
+                        if (collected) R.string.detail_uncollect else R.string.detail_collect,
+                    ),
+                    tint = if (collected) {
+                        MaterialTheme.colorScheme.primary
+                    } else {
+                        MaterialTheme.colorScheme.onSurface
+                    },
+                    modifier = Modifier.size(22.dp),
+                )
+            }
+        }
     }
 }
 
