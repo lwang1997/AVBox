@@ -14,6 +14,8 @@ data class FollowTmdbInfo(
     val totalEpisodes: Int = 0,
     val lastSeason: Int = 0,
     val lastEpisode: Int = 0,
+    /** 最近一集的绝对集数（前面各季集数之和 + 本季集数），与观看进度同口径展示。 */
+    val lastAbsoluteEpisode: Int = 0,
     val lastAirDate: String = "",
     val nextSeason: Int = 0,
     val nextEpisode: Int = 0,
@@ -47,6 +49,7 @@ data class FollowTmdbInfo(
                 totalEpisodes = detail.totalEpisodes.coerceAtLeast(0),
                 lastSeason = (last?.season ?: 0).coerceAtLeast(0),
                 lastEpisode = (last?.episode ?: 0).coerceAtLeast(0),
+                lastAbsoluteEpisode = absoluteEpisode(detail),
                 lastAirDate = last?.airDate.orEmpty(),
                 nextSeason = (next?.season ?: 0).coerceAtLeast(0),
                 nextEpisode = (next?.episode ?: 0).coerceAtLeast(0),
@@ -55,6 +58,20 @@ data class FollowTmdbInfo(
                 year = year,
                 altName = altName,
             )
+        }
+
+        /**
+         * 最近一集的绝对集数 = 之前各季集数之和 + 本季集号。
+         * 只累加季号在 (0, lastSeason) 区间的正片季，忽略特别篇(0)与同季之后的季，
+         * 避免 TMDB 季数据缺失/乱序时把结果算错。
+         */
+        private fun absoluteEpisode(detail: TmdbDetail): Int {
+            val last = detail.lastEpisode ?: return 0
+            if (last.season <= 0 || last.episode <= 0) return 0
+            val prior = detail.seasons
+                .filter { it.seasonNumber in 1 until last.season }
+                .sumOf { it.episodeCount.coerceAtLeast(0) }
+            return (prior + last.episode).coerceAtLeast(0)
         }
 
         fun encode(info: FollowTmdbInfo): String = gson.toJson(info)

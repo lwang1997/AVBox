@@ -72,7 +72,7 @@ private val FollowStatusDotSize = 10.dp
 private const val TmdbInfoSeparator = " · "
 
 @Composable
-private fun followTmdbText(info: FollowTmdbInfo): String? {
+private fun followTmdbText(info: FollowTmdbInfo, watchedEpisode: Int?): String? {
     val parts = ArrayList<String>(4)
     val status = when (info.status.lowercase(Locale.ROOT).trim()) {
         "returning series" -> stringResource(R.string.following_tmdb_status_returning)
@@ -83,21 +83,11 @@ private fun followTmdbText(info: FollowTmdbInfo): String? {
         else -> info.status.trim()
     }
     if (status.isNotEmpty()) parts.add(status)
-    if (info.lastEpisode > 0) {
-        val ep = stringResource(
-            R.string.following_tmdb_season_episode,
-            info.lastSeason,
-            info.lastEpisode,
-        )
-        parts.add(stringResource(R.string.following_tmdb_last, ep))
+    if (watchedEpisode != null && watchedEpisode > 0) {
+        parts.add(stringResource(R.string.following_tmdb_watched, watchedEpisode))
     }
-    if (info.nextEpisode > 0) {
-        val ep = stringResource(
-            R.string.following_tmdb_season_episode,
-            info.nextSeason,
-            info.nextEpisode,
-        )
-        parts.add(stringResource(R.string.following_tmdb_next, ep))
+    if (info.lastAbsoluteEpisode > 0) {
+        parts.add(stringResource(R.string.following_tmdb_last, info.lastAbsoluteEpisode))
     }
     if (info.totalEpisodes > 0) {
         parts.add(stringResource(R.string.following_tmdb_total, info.totalEpisodes))
@@ -246,7 +236,8 @@ internal fun FollowRow(
                     }
                 }
                 val tmdbInfo = remember(follow.tmdbInfo) { FollowTmdbInfo.decode(follow.tmdbInfo) }
-                val tmdbText = tmdbInfo?.let { followTmdbText(it) }
+                val watchedEpisode = history?.playIndex?.plus(1)?.takeIf { it > 0 }
+                val tmdbText = tmdbInfo?.let { followTmdbText(it, watchedEpisode) }
                 if (tmdbText != null) {
                     Text(
                         text = tmdbText,

@@ -269,8 +269,8 @@
     <string name="following_not_watched">還沒有看</string>
     <string name="following_watched">已經看了</string>
     <string name="following_tmdb_season_episode">S%1$dE%2$d</string>
-    <string name="following_tmdb_last">更新至 %1$s</string>
-    <string name="following_tmdb_next">下一集 %1$s</string>
+    <string name="following_tmdb_last">更新至第%1$d集</string>
+    <string name="following_tmdb_watched">看到第%1$d集</string>
     <string name="following_tmdb_total">共%1$d集</string>
     <string name="following_tmdb_status_returning">連載中</string>
     <string name="following_tmdb_status_ended">已完結</string>

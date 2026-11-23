@@ -269,8 +269,8 @@
     <string name="following_not_watched">Not watched yet</string>
     <string name="following_watched">Already watched</string>
     <string name="following_tmdb_season_episode">S%1$dE%2$d</string>
-    <string name="following_tmdb_last">Up to %1$s</string>
-    <string name="following_tmdb_next">Next %1$s</string>
+    <string name="following_tmdb_last">Up to ep %1$d</string>
+    <string name="following_tmdb_watched">Watched ep %1$d</string>
     <string name="following_tmdb_total">%1$d eps</string>
     <string name="following_tmdb_status_returning">Returning</string>
     <string name="following_tmdb_status_ended">Ended</string>
