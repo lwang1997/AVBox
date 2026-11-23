@@ -160,6 +160,34 @@ object SyncSnapshot {
         PlaybackProgress.reload()
     }
 
+    /**
+     * 本地备份恢复：**整体替换**（清空本地 → 写入备份），不做合并 ——
+     * 备份文件按时间戳命名、由用户主动挑选，语义就是"回到备份时点"。
+     * 墓碑同步替换（本地较备份更新的删除会随备份一起回滚，属预期）。
+     */
+    suspend fun replaceData(data: SyncData) {
+        val db = AppDataManager.get()
+        // 1. 三张业务表整表清空
+        db.getVodRecordDao().clearAll()
+        db.getVodCollectDao().deleteAll()
+        db.getVodFollowDao().clearAll()
+        // 2. 进度：只清 Long 类型行（cache 表还存别的类型），再清进度索引
+        val cacheDao = db.getCacheDao()
+        cacheDao.getAll().forEach { row ->
+            if (row.data?.let { toLong(it) } != null) cacheDao.delete(row)
+        }
+        KV.keys(WatchProgressIndex.KEY_PREFIX).forEach { KV.delete(it) }
+        // 3. KV 附加数据整键删除（applyData 写入时无旧值可合并）
+        KV.delete(KEY_PERCENT)
+        KV.delete(KEY_TOTALS)
+        KV.delete(KEY_WATCHED)
+        KV.keys(TRACK_PREFIX).forEach { KV.delete(it) }
+        // 4. 墓碑以备份为准
+        SyncTombstones.write(HashMap())
+        // 5. 写入备份（表已空，applyData 的 upsert 即纯插入）
+        applyData(data)
+    }
+
     private val gson = com.google.gson.Gson()
 
     private fun readMapRaw(key: String): Map<String, String> {

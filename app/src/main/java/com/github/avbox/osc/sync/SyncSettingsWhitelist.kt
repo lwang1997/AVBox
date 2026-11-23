@@ -3,48 +3,20 @@ package com.github.avbox.osc.sync
 import com.github.avbox.osc.util.KVKeys
 
 /**
- * 手动同步的设置白名单。只纳入跨设备一致、且不含设备/源绑定信息的偏好。
- * 任何 api_url / 订阅 / 源历史 / 本地 SAF tree / 设备标识 / 看门狗状态 一律排除。
+ * 手动同步的设置白名单。只纳入跨设备一致、且不含设备绑定信息的偏好。
+ *  - 2026-11-23 调整：解码/画质/预载等"设备能力"项移出（各端按屏幕与性能自配），
+ *    TMDB Key / 接口地址 / 订阅源纳入（新设备重填成本最高的一组）。
+ *  - 本地 SAF tree / 设备标识 / 看门狗状态 / 同步账号与加密密码 一律排除。
  */
 object SyncSettingsWhitelist {
 
     private val KEYS: Set<String> = listOf(
-        // 播放核心与画面
-        KVKeys.PLAY_TYPE,
-        KVKeys.PLAY_RENDER,
-        KVKeys.PLAY_SCALE,
-        KVKeys.PLAY_TUNNEL,
-        KVKeys.PLAY_PREFER_AAC,
-        KVKeys.EXO_DECODE,
-        KVKeys.KERNEL_PREWARM,
-        KVKeys.EXO_VIDEO_DYNAMIC_SCHEDULING,
+        // 播放行为（口味，跟人不跟设备）
         KVKeys.AUTO_SWITCH_LINE,
         KVKeys.M3U8_PURIFY,
         KVKeys.DETAIL_PLAY_FULLSCREEN,
-        KVKeys.BUFFER_TIMES,
-        KVKeys.PLAY_CACHE,
-        KVKeys.EXO_CACHE_SIZE_MB,
-        KVKeys.PRELOAD_NEXT_EPISODE,
-        KVKeys.PRELOAD_DURATION,
         KVKeys.LONG_PRESS_SPEED,
         KVKeys.LIVE_PLAY_SCALE,
-        // 画质
-        KVKeys.PICTURE_PRESET,
-        KVKeys.PICTURE_SATURATION,
-        KVKeys.PICTURE_CONTRAST,
-        KVKeys.PICTURE_BRIGHTNESS,
-        KVKeys.PICTURE_GAMMA,
-        KVKeys.PICTURE_HUE,
-        KVKeys.PICTURE_TEMPERATURE,
-        KVKeys.PICTURE_SHARPNESS,
-        KVKeys.PICTURE_SHADOW_LIFT,
-        KVKeys.ANIME4K_ENABLED,
-        KVKeys.ANIME4K_TIER,
-        KVKeys.ANIME4K_MODE,
-        KVKeys.ANIME4K_AUTO,
-        KVKeys.ANIME4K_AUTO_MAX_WIDTH,
-        KVKeys.ANIME4K_SHARPEN,
-        KVKeys.ANIME4K_DEBLUR,
         // 字幕
         KVKeys.SUBTITLE_TEXT_SIZE,
         KVKeys.SUBTITLE_TEXT_STYLE,
@@ -92,11 +64,19 @@ object SyncSettingsWhitelist {
         KVKeys.ISO_LPCM,
         KVKeys.ISO_TRUEHD_CORE,
         KVKeys.ISO_PGS,
-        // TMDB 展示偏好（不含 API Key / 自定义 base）
+        // TMDB 展示偏好 + 密钥（Key/base 是新设备重填成本最高的一组）
         KVKeys.TMDB_ENABLE,
         KVKeys.TMDB_POSTER_STYLE,
         KVKeys.TMDB_LOGO_ENABLED,
         KVKeys.TMDB_IMAGE_QUALITY,
+        KVKeys.TMDB_API_KEY,
+        KVKeys.TMDB_API_BASE,
+        KVKeys.TMDB_IMAGE_BASE,
+        // 接口地址与订阅源（不含 api_history 源历史：可能混入本机 SAF 路径）
+        KVKeys.API_URL,
+        KVKeys.LIVE_API_URL,
+        KVKeys.SUBSCRIBE_LIST,
+        KVKeys.LIVE_SUBSCRIBE_LIST,
     ).toHashSet()
 
     /** 补充几个未进 KVKeys 的裸键 */

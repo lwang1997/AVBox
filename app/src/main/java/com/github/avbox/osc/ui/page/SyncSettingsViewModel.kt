@@ -16,6 +16,7 @@ data class SyncSettingsState(
     val url: String = "",
     val user: String = "",
     val password: String = "",
+    val encryptPassword: String = "",
     val autoEnabled: Boolean = false,
     val syncHistory: Boolean = true,
     val syncCollect: Boolean = true,
@@ -36,6 +37,7 @@ class SyncSettingsViewModel : ViewModel() {
         url = SyncConfig.url,
         user = SyncConfig.user,
         password = SyncConfig.password,
+        encryptPassword = SyncConfig.encryptPassword,
         autoEnabled = SyncConfig.autoEnabled,
         syncHistory = SyncConfig.syncHistory,
         syncCollect = SyncConfig.syncCollect,
@@ -50,7 +52,8 @@ class SyncSettingsViewModel : ViewModel() {
 
     fun setUrl(value: String) {
         SyncConfig.url = value
-        _state.value = _state.value.copy(url = SyncConfig.url)
+        // 直接回显用户输入（getter 会剥 /AVBox 尾段，逐字输入到 "AVBox" 时会被吞掉）
+        _state.value = _state.value.copy(url = value)
     }
 
     fun setUser(value: String) {
@@ -61,6 +64,11 @@ class SyncSettingsViewModel : ViewModel() {
     fun setPassword(value: String) {
         SyncConfig.password = value
         _state.value = _state.value.copy(password = SyncConfig.password)
+    }
+
+    fun setEncryptPassword(value: String) {
+        SyncConfig.encryptPassword = value
+        _state.value = _state.value.copy(encryptPassword = SyncConfig.encryptPassword)
     }
 
     fun setAuto(enabled: Boolean) {

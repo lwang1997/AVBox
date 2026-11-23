@@ -2,11 +2,15 @@
 
 package com.github.avbox.osc.ui.page
 
+import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.net.Uri
+import android.os.Environment
 import android.os.SystemClock
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -43,6 +47,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.github.avbox.osc.R
 import com.github.avbox.osc.io.FileUtils
 import com.github.avbox.osc.net.HttpClients
+import com.github.avbox.osc.sync.SyncBackup
 import com.github.avbox.osc.ui.ConfigManageActivity
 import com.github.avbox.osc.ui.LogViewActivity
 import com.github.avbox.osc.ui.PlaySettingsActivity
@@ -59,14 +64,21 @@ import com.github.avbox.osc.ui.components.SettingsGroup
 import com.github.avbox.osc.ui.components.SettingsOptionMenuRow
 import com.github.avbox.osc.ui.components.SettingsRow
 import com.github.avbox.osc.ui.settings.UiSettingsState
+import com.github.avbox.osc.util.AppLog
 import com.github.avbox.osc.util.DefaultConfig
 import com.github.avbox.osc.util.HistoryHelper
+import com.github.avbox.osc.util.PermissionHelper
 import com.github.avbox.osc.util.SearchSettingsState
 import com.github.avbox.osc.util.SpiderStorageNotice
 import com.github.avbox.osc.api.TmdbPoster
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
+import java.io.IOException
+import java.text.SimpleDateFormat
+import java.util.Date
+import java.util.Locale
 
 private const val CACHE_SIZE_REFRESH_MIN_INTERVAL_MS = 60_000L
 
@@ -122,6 +134,59 @@ class SettingsViewModel : ViewModel() {
         }
     }
 
+    /** 导出本地备份：zip → 自动写入 手机存储/AVBox/<时间戳>.zip（不覆盖已有文件），返回实际路径 */
+    fun exportBackup(context: Context, onDone: (String?) -> Unit) {
+        viewModelScope.launch {
+            val path = try {
+                val bytes = withContext(Dispatchers.IO) { SyncBackup.exportZip() }
+                withContext(Dispatchers.IO) { writeBackupFile(bytes) }
+            } catch (t: Throwable) {
+                AppLog.e("SettingsVM", "backup export failed", t)
+                null
+            }
+            onDone(path)
+        }
+    }
+
+    /**
+     * 写入存储根目录 AVBox/（用户可见、文件管理器直达）。
+     * Android 11+ 写根目录需要"所有文件访问"权限，导出入口处已检查并申请；
+     * 未授权时 writeBytes 会抛 IOException，由 exportBackup 兜底转失败 toast。
+     */
+    private fun writeBackupFile(bytes: ByteArray): String {
+        val stamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
+        val base = "avbox-backup_$stamp"
+        val dir = File(Environment.getExternalStorageDirectory(), "AVBox").apply { mkdirs() }
+        var name = "$base.zip"
+        var seq = 1
+        while (File(dir, name).exists()) {
+            name = "${base}_$seq.zip"
+            seq++
+        }
+        val file = File(dir, name)
+        file.writeBytes(bytes)
+        return file.absolutePath
+    }
+
+    /** 恢复本地备份：读文件字节（zip 或旧版裸文件）→ 数据整体替换 + 设置覆盖，结果交 UI 转 toast */
+    fun importBackup(context: Context, uri: Uri, onDone: (SyncBackup.ImportResult) -> Unit) {
+        viewModelScope.launch {
+            val result = try {
+                val bytes = withContext(Dispatchers.IO) {
+                    val input = context.contentResolver.openInputStream(uri)
+                        ?: throw IOException("openInputStream returned null")
+                    input.use { it.readBytes() }
+                }
+                SyncBackup.importBytes(bytes)
+            } catch (t: Throwable) {
+                AppLog.e("SettingsVM", "backup import failed", t)
+                SyncBackup.ImportResult.Failed(t.message ?: "read failed")
+            }
+            if (result is SyncBackup.ImportResult.Success) refreshState()
+            onDone(result)
+        }
+    }
+
     private fun cacheSizeText(): String =
         FileUtils.formatCacheSize(FileUtils.cacheSize())
 
@@ -152,6 +217,18 @@ fun SettingsPage(
     val context = LocalContext.current
     val versionName = remember { DefaultConfig.appVersionName(context) ?: "" }
     var aboutSheet by remember { mutableStateOf(false) }
+
+    // 本地备份：导出自动写入 Download/AVBox（无需选目录）；导入用 SAF 选已有文件
+    var pendingImportUri by remember { mutableStateOf<Uri?>(null) }
+    var showImportConfirm by remember { mutableStateOf(false) }
+    val importLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument(),
+    ) { uri ->
+        if (uri != null) {
+            pendingImportUri = uri
+            showImportConfirm = true
+        }
+    }
 
     val listState = rememberScrollState()
 
@@ -219,6 +296,7 @@ fun SettingsPage(
                     )
                 }
             }
+
 
             SettingsGroup(title = null) {
                 SettingsCard(SettingsCardPosition.FIRST) {
@@ -318,6 +396,92 @@ fun SettingsPage(
                         onClick = { aboutSheet = true },
                     )
                 }
+                SettingsCard(SettingsCardPosition.MIDDLE) {
+                    SettingsRow(
+                        title = stringResource(R.string.settings_backup_export),
+                        subtitle = stringResource(R.string.settings_backup_export_subtitle),
+                        iconRes = R.drawable.ic_export,
+                        onClick = {
+                            val doExport = {
+                                vm.exportBackup(context) { path ->
+                                    val msg = if (path != null) {
+                                        context.getString(R.string.toast_backup_exported) + ": " + path
+                                    } else {
+                                        context.getString(R.string.toast_backup_export_failed)
+                                    }
+                                    Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+                                }
+                            }
+                            // 写存储根目录：Android 11+ 需"所有文件访问"，未授权先申请
+                            if (PermissionHelper.isStorageGranted(context)) {
+                                doExport()
+                            } else {
+                                val activity = context as? Activity
+                                if (activity == null) {
+                                    doExport()
+                                } else {
+                                    PermissionHelper.requestStorage(activity) { granted, _ ->
+                                        if (!granted.isNullOrEmpty()) {
+                                            doExport()
+                                        } else {
+                                            Toast.makeText(
+                                                context,
+                                                context.getString(R.string.toast_backup_no_storage),
+                                                Toast.LENGTH_LONG,
+                                            ).show()
+                                        }
+                                    }
+                                }
+                            }
+                        },
+                    )
+                }
+
+                SettingsCard(SettingsCardPosition.MIDDLE) {
+                    SettingsRow(
+                        title = stringResource(R.string.settings_backup_import),
+                        subtitle = stringResource(R.string.settings_backup_import_subtitle),
+                        iconRes = R.drawable.ic_file_choose,
+                        onClick = { importLauncher.launch(arrayOf("*/*")) },
+                    )
+                    if (showImportConfirm) {
+                        AVBoxAlertDialog(
+                            onDismissRequest = { showImportConfirm = false },
+                            title = { Text(stringResource(R.string.settings_backup_confirm_title)) },
+                            text = { Text(stringResource(R.string.settings_backup_confirm_text)) },
+                            dismissButton = {
+                                TextButton(onClick = { showImportConfirm = false }) {
+                                    Text(stringResource(R.string.common_cancel))
+                                }
+                            },
+                            confirmButton = {
+                                TextButton(onClick = {
+                                    showImportConfirm = false
+                                    val uri = pendingImportUri
+                                    pendingImportUri = null
+                                    if (uri != null) {
+                                        vm.importBackup(context, uri) { result ->
+                                            val msg = when (result) {
+                                                is SyncBackup.ImportResult.Success ->
+                                                    context.getString(R.string.toast_backup_imported)
+                                                is SyncBackup.ImportResult.Empty ->
+                                                    context.getString(R.string.toast_backup_empty)
+                                                is SyncBackup.ImportResult.NeedPassword ->
+                                                    context.getString(R.string.toast_backup_need_password)
+                                                is SyncBackup.ImportResult.Failed ->
+                                                    context.getString(R.string.toast_backup_import_failed, result.message)
+                                            }
+                                            Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+                                        }
+                                    }
+                                }) {
+                                    Text(stringResource(R.string.common_confirm))
+                                }
+                            },
+                        )
+                    }
+                }
+
 
                 SettingsCard(SettingsCardPosition.MIDDLE) {
                     SettingsRow(

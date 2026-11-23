@@ -33,6 +33,10 @@ interface VodRecordDao {
     @Query("DELETE FROM vodRecord where `cid`=:cid")
     suspend fun deleteAll(cid: String?)
 
+    /** 本地备份恢复用：整表清空（无 cid 过滤） */
+    @Query("DELETE FROM vodRecord")
+    suspend fun clearAll()
+
     @Query("DELETE FROM vodRecord where `cid`=:cid and id NOT IN (SELECT id FROM vodRecord WHERE `cid`=:cid ORDER BY updateTime desc, id desc LIMIT :size)")
     suspend fun reserver(cid: String?, size: Int): Int
 

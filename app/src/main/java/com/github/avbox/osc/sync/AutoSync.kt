@@ -13,7 +13,8 @@ import java.util.concurrent.atomic.AtomicBoolean
  */
 object AutoSync {
 
-    private const val MIN_INTERVAL_MS = 60_000L
+    /** 自动同步最小间隔（P1）：60s → 5min，配合 P0/P2 把无效请求进一步压下来 */
+    private const val MIN_INTERVAL_MS = 300_000L
     private const val LAUNCH_DELAY_MS = 5_000L
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)

@@ -114,6 +114,22 @@ fun SyncSettingsScreen(
                 }
             }
 
+            // 数据加密（快照压缩 + AES-GCM；留空不加密）
+            SettingsGroup(title = stringResource(R.string.settings_group_encrypt)) {
+                SettingsCard(SettingsCardPosition.SINGLE) {
+                    SettingsTextFieldRow(
+                        label = stringResource(R.string.settings_sync_encrypt_password),
+                        value = state.encryptPassword,
+                        onValueChange = vm::setEncryptPassword,
+                        modifier = Modifier.padding(horizontal = CardContentPadding, vertical = FieldVerticalPadding),
+                        placeholder = stringResource(R.string.settings_sync_encrypt_hint),
+                        masked = true,
+                        fieldShape = FieldShape,
+                        fieldHeight = FieldHeight,
+                    )
+                }
+            }
+
             // 自动同步
             SettingsGroup(title = stringResource(R.string.settings_group_auto)) {
                 SettingsCard(SettingsCardPosition.SINGLE) {

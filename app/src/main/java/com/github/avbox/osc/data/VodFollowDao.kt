@@ -32,6 +32,10 @@ interface VodFollowDao {
     @Query("DELETE FROM vodFollow where `cid`=:cid")
     suspend fun deleteByCid(cid: String?)
 
+    /** 本地备份恢复用：整表清空（无 cid 过滤） */
+    @Query("DELETE FROM vodFollow")
+    suspend fun clearAll()
+
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun insertAll(records: List<VodFollow>)
 }
