@@ -75,6 +75,18 @@ class FollowTmdbInfoTest {
     }
 
     @Test
+    fun displayUpdateEpisode_prefersAbsoluteAndFallsBackToSeasonEpisode() {
+        // 新快照：绝对集数优先
+        val fresh = FollowTmdbInfo(lastSeason = 2, lastEpisode = 5, lastAbsoluteEpisode = 28)
+        assertEquals(28, fresh.displayUpdateEpisode)
+        // 旧缓存：没有绝对集数字段，回退到季内集号
+        val legacy = FollowTmdbInfo(lastSeason = 1, lastEpisode = 12, lastAbsoluteEpisode = 0)
+        assertEquals(12, legacy.displayUpdateEpisode)
+        // 无更新集数
+        assertEquals(0, FollowTmdbInfo().displayUpdateEpisode)
+    }
+
+    @Test
     fun fromDetail_returnsNullWhenNoUpdateInfo() {
         val detail = TmdbDetail("x", 0.0, emptyList(), emptyList(), emptyList())
         assertNull(FollowTmdbInfo.fromDetail(detail))

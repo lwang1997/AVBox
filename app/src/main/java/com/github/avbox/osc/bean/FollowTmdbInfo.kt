@@ -26,6 +26,13 @@ data class FollowTmdbInfo(
     val altName: String = "",
 ) : Serializable {
 
+    /**
+     * 展示用「更新至第几集」：优先用绝对集数；旧缓存没有该字段时回退到季内集号，
+     * 保证旧追剧条目在刷新前也能显示更新集数（单季剧两者相同，多季剧刷新后修正）。
+     */
+    val displayUpdateEpisode: Int
+        get() = if (lastAbsoluteEpisode > 0) lastAbsoluteEpisode else lastEpisode.coerceAtLeast(0)
+
     companion object {
         private val gson = Gson()
 

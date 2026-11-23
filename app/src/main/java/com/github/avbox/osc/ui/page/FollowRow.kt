@@ -86,8 +86,8 @@ private fun followTmdbText(info: FollowTmdbInfo, watchedEpisode: Int?): String? 
     if (watchedEpisode != null && watchedEpisode > 0) {
         parts.add(stringResource(R.string.following_tmdb_watched, watchedEpisode))
     }
-    if (info.lastAbsoluteEpisode > 0) {
-        parts.add(stringResource(R.string.following_tmdb_last, info.lastAbsoluteEpisode))
+    if (info.displayUpdateEpisode > 0) {
+        parts.add(stringResource(R.string.following_tmdb_last, info.displayUpdateEpisode))
     }
     if (info.totalEpisodes > 0) {
         parts.add(stringResource(R.string.following_tmdb_total, info.totalEpisodes))
