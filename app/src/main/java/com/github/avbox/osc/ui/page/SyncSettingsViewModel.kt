@@ -10,6 +10,7 @@ import com.github.avbox.osc.R
 import com.github.avbox.osc.sync.SyncConfig
 import com.github.avbox.osc.sync.SyncManager
 import com.github.avbox.osc.sync.SyncResult
+import com.github.avbox.osc.util.PendingRestart
 import kotlinx.coroutines.launch
 
 data class SyncSettingsState(
@@ -151,7 +152,7 @@ class SyncSettingsViewModel : ViewModel() {
         }
     }
 
-    fun downloadSettings(context: Context) {
+    fun downloadSettings(context: Context, onApplied: () -> Unit = {}) {
         if (!SyncConfig.configured) {
             toast(context, R.string.toast_sync_no_config)
             return
@@ -161,7 +162,8 @@ class SyncSettingsViewModel : ViewModel() {
             when (val result = SyncManager.downloadSettings()) {
                 is SyncResult.Success -> {
                     _state.value = _state.value.copy(busy = false)
-                    toast(context, R.string.toast_settings_downloaded)
+                    PendingRestart.mark()
+                    onApplied()
                 }
                 is SyncResult.Failure -> {
                     _state.value = _state.value.copy(busy = false)

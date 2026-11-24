@@ -7,6 +7,10 @@ import android.os.Build
 import android.os.StrictMode
 import android.os.SystemClock
 
+import androidx.lifecycle.DefaultLifecycleObserver
+import androidx.lifecycle.LifecycleOwner
+import androidx.lifecycle.ProcessLifecycleOwner
+
 import com.github.catvod.crawler.JsLoader
 import com.github.avbox.osc.BuildConfig
 import com.github.avbox.osc.boot.BootGuard
@@ -22,6 +26,7 @@ import com.github.avbox.osc.util.KVKeys
 import com.github.avbox.osc.util.KV
 import com.github.avbox.osc.util.AppLog
 import com.github.avbox.osc.util.LanguageManager
+import com.github.avbox.osc.util.PendingRestart
 import com.github.avbox.osc.util.Probe
 import com.github.avbox.osc.util.VodImages
 import com.whl.quickjs.android.QuickJSLoader
@@ -55,6 +60,7 @@ class App : Application() {
         BootGuard.install()
         bootMark("bootGuard")
         initParams()
+        PendingRestart.clear()
         bootMark("initParams")
         Probe.trace("boot:httpClients") { HttpClients.init() }
         bootMark("httpClients")
@@ -80,7 +86,21 @@ class App : Application() {
             Probe.trace("boot:cleanPlayerCache") { FileUtils.cleanPlayerCache() }
         }, "exo-cache-boot").start()
         Probe.trace("boot:autoSync") { AutoSync.onAppLaunch() }
+        installAutoSyncLifecycle()
         bootMark("onCreateDone")
+    }
+
+    /** 前后台同步：ON_START 拉增量，ON_STOP 把本机改动推上去（进程被杀则无法保证） */
+    private fun installAutoSyncLifecycle() {
+        ProcessLifecycleOwner.get().lifecycle.addObserver(object : DefaultLifecycleObserver {
+            override fun onStart(owner: LifecycleOwner) {
+                AutoSync.onForeground()
+            }
+
+            override fun onStop(owner: LifecycleOwner) {
+                AutoSync.onBackground()
+            }
+        })
     }
 
     private fun loadQuickJs() {

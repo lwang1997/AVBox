@@ -13,6 +13,9 @@ import androidx.compose.material3.Text
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
@@ -22,6 +25,7 @@ import com.github.avbox.osc.R
 import com.github.avbox.osc.ui.components.AppTopBarScaffold
 import com.github.avbox.osc.ui.components.SettingsCard
 import com.github.avbox.osc.ui.components.SettingsCardPosition
+import com.github.avbox.osc.ui.components.RestartPromptDialog
 import com.github.avbox.osc.ui.components.SettingsGroup
 import com.github.avbox.osc.ui.components.SettingsRow
 import com.github.avbox.osc.ui.components.SettingsSwitchRow
@@ -45,6 +49,7 @@ fun SyncSettingsScreen(
 ) {
     val context = LocalContext.current
     val state by vm.state
+    var showRestartPrompt by remember { mutableStateOf(false) }
 
     AppTopBarScaffold(
         titleContent = {
@@ -197,7 +202,7 @@ fun SyncSettingsScreen(
                         title = stringResource(R.string.settings_sync_download_settings),
                         subtitle = stringResource(R.string.settings_sync_settings_subtitle),
                         enabled = !state.busy,
-                        onClick = { vm.downloadSettings(context) },
+                        onClick = { vm.downloadSettings(context) { showRestartPrompt = true } },
                     )
                 }
             }
@@ -215,6 +220,10 @@ fun SyncSettingsScreen(
 
             Spacer(Modifier.height(48.dp))
         }
+    }
+
+    if (showRestartPrompt) {
+        RestartPromptDialog(R.string.settings_restart_after_sync) { showRestartPrompt = false }
     }
 }
 

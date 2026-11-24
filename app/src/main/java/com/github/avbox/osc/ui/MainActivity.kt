@@ -9,7 +9,6 @@ import com.github.avbox.osc.R
 import com.github.avbox.osc.api.FollowTmdbRefresh
 import com.github.avbox.osc.ui.base.BaseActivity
 import com.github.avbox.osc.player.PlaybackService
-import com.github.avbox.osc.sync.AutoSync
 import com.github.avbox.osc.ui.page.MainScreen
 import com.github.avbox.osc.ui.theme.AVBoxTheme
 import com.github.avbox.osc.ui.theme.AppThemeState
@@ -38,7 +37,6 @@ class MainActivity : BaseActivity() {
         super.onResume()
         applyStatusBarAppearance()
         PlaybackService.prewarm(this, PREWARM_ON_RESUME_DELAY_MS)
-        AutoSync.onResume()
         FollowTmdbRefresh.onResume()
     }
 

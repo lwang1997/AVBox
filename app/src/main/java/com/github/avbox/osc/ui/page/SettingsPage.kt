@@ -28,6 +28,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -55,6 +56,7 @@ import com.github.avbox.osc.ui.PreferenceSettingsActivity
 import com.github.avbox.osc.ui.SyncSettingsActivity
 import com.github.avbox.osc.ui.ThemeSettingsActivity
 import com.github.avbox.osc.ui.components.AVBoxAlertDialog
+import com.github.avbox.osc.ui.components.RestartPromptDialog
 import com.github.avbox.osc.ui.components.AVBoxBottomSheet
 import com.github.avbox.osc.ui.components.AppTopBarScaffold
 import com.github.avbox.osc.ui.components.LocalSheetDismissThen
@@ -67,9 +69,11 @@ import com.github.avbox.osc.ui.settings.UiSettingsState
 import com.github.avbox.osc.util.AppLog
 import com.github.avbox.osc.util.DefaultConfig
 import com.github.avbox.osc.util.HistoryHelper
+import com.github.avbox.osc.util.PendingRestart
 import com.github.avbox.osc.util.PermissionHelper
 import com.github.avbox.osc.util.SearchSettingsState
 import com.github.avbox.osc.util.SpiderStorageNotice
+import com.github.avbox.osc.util.restartApp
 import com.github.avbox.osc.api.TmdbPoster
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -82,8 +86,31 @@ import java.util.Locale
 
 private const val CACHE_SIZE_REFRESH_MIN_INTERVAL_MS = 60_000L
 
+/** 备份目录：手机存储/AVBox/backup（与 AVBox 其它产物分开，用户可在文件管理器直达） */
+private const val AVBOX_DIR_NAME = "AVBox"
+private const val BACKUP_DIR_NAME = "backup"
+
+private fun avboxDir(): File = File(Environment.getExternalStorageDirectory(), AVBOX_DIR_NAME)
+
+private fun backupDir(): File = File(avboxDir(), BACKUP_DIR_NAME)
+
+/** 列表/弹层的卡片圆角位置 */
+private fun pickCardPosition(index: Int, size: Int): SettingsCardPosition = when {
+    size <= 1 -> SettingsCardPosition.SINGLE
+    index == 0 -> SettingsCardPosition.FIRST
+    index == size - 1 -> SettingsCardPosition.LAST
+    else -> SettingsCardPosition.MIDDLE
+}
+
 data class SettingsState(
     val cacheSizeText: String = "",
+)
+
+/** 备份列表项：file 原始文件，name 文件名，detail 修改时间 + 大小（弹层副标题） */
+data class BackupEntry(
+    val file: File,
+    val name: String,
+    val detail: String,
 )
 
 class SettingsViewModel : ViewModel() {
@@ -134,7 +161,7 @@ class SettingsViewModel : ViewModel() {
         }
     }
 
-    /** 导出本地备份：zip → 自动写入 手机存储/AVBox/<时间戳>.zip（不覆盖已有文件），返回实际路径 */
+    /** 导出本地备份：zip → 自动写入 手机存储/AVBox/backup/<时间戳>.zip（不覆盖已有文件），返回实际路径 */
     fun exportBackup(context: Context, onDone: (String?) -> Unit) {
         viewModelScope.launch {
             val path = try {
@@ -149,14 +176,14 @@ class SettingsViewModel : ViewModel() {
     }
 
     /**
-     * 写入存储根目录 AVBox/（用户可见、文件管理器直达）。
+     * 写入 手机存储/AVBox/backup/（用户可见、文件管理器直达）。
      * Android 11+ 写根目录需要"所有文件访问"权限，导出入口处已检查并申请；
      * 未授权时 writeBytes 会抛 IOException，由 exportBackup 兜底转失败 toast。
      */
     private fun writeBackupFile(bytes: ByteArray): String {
         val stamp = SimpleDateFormat("yyyyMMdd_HHmmss", Locale.US).format(Date())
         val base = "avbox-backup_$stamp"
-        val dir = File(Environment.getExternalStorageDirectory(), "AVBox").apply { mkdirs() }
+        val dir = backupDir().apply { mkdirs() }
         var name = "$base.zip"
         var seq = 1
         while (File(dir, name).exists()) {
@@ -168,23 +195,57 @@ class SettingsViewModel : ViewModel() {
         return file.absolutePath
     }
 
+    /**
+     * 扫描 手机存储/AVBox/backup（含旧版留在 AVBox/ 根下的）里的 zip 备份，按修改时间倒序。
+     * 读该目录需要"所有文件访问"；没授权时返回空列表，UI 走系统选择器兜底。
+     */
+    suspend fun listBackups(): List<BackupEntry> = withContext(Dispatchers.IO) {
+        val stamp = SimpleDateFormat("yyyy-MM-dd HH:mm", Locale.getDefault())
+        listOf(backupDir(), avboxDir()).distinct()
+            .asSequence()
+            .flatMap { dir -> (dir.listFiles() ?: emptyArray()).asSequence() }
+            .filter { it.isFile && it.name.endsWith(".zip", ignoreCase = true) }
+            .sortedByDescending { it.lastModified() }
+            .map { file ->
+                BackupEntry(
+                    file = file,
+                    name = file.name,
+                    detail = stamp.format(Date(file.lastModified())) + " · " +
+                            FileUtils.formatCacheSize(file.length()),
+                )
+            }
+            .toList()
+    }
+
+    /** 恢复本地备份目录里的文件（与系统选择器同一条恢复流程） */
+    fun importBackupFile(file: File, onDone: (SyncBackup.ImportResult) -> Unit) {
+        viewModelScope.launch {
+            finishImport(readImport { file.readBytes() }, onDone)
+        }
+    }
+
     /** 恢复本地备份：读文件字节（zip 或旧版裸文件）→ 数据整体替换 + 设置覆盖，结果交 UI 转 toast */
     fun importBackup(context: Context, uri: Uri, onDone: (SyncBackup.ImportResult) -> Unit) {
         viewModelScope.launch {
-            val result = try {
-                val bytes = withContext(Dispatchers.IO) {
-                    val input = context.contentResolver.openInputStream(uri)
-                        ?: throw IOException("openInputStream returned null")
-                    input.use { it.readBytes() }
-                }
-                SyncBackup.importBytes(bytes)
-            } catch (t: Throwable) {
-                AppLog.e("SettingsVM", "backup import failed", t)
-                SyncBackup.ImportResult.Failed(t.message ?: "read failed")
+            val result = readImport {
+                val input = context.contentResolver.openInputStream(uri)
+                    ?: throw IOException("openInputStream returned null")
+                input.use { it.readBytes() }
             }
-            if (result is SyncBackup.ImportResult.Success) refreshState()
-            onDone(result)
+            finishImport(result, onDone)
         }
+    }
+
+    private suspend fun readImport(read: () -> ByteArray): SyncBackup.ImportResult = try {
+        SyncBackup.importBytes(withContext(Dispatchers.IO) { read() })
+    } catch (t: Throwable) {
+        AppLog.e("SettingsVM", "backup import failed", t)
+        SyncBackup.ImportResult.Failed(t.message ?: "read failed")
+    }
+
+    private fun finishImport(result: SyncBackup.ImportResult, onDone: (SyncBackup.ImportResult) -> Unit) {
+        if (result is SyncBackup.ImportResult.Success) refreshState()
+        onDone(result)
     }
 
     private fun cacheSizeText(): String =
@@ -218,16 +279,24 @@ fun SettingsPage(
     val versionName = remember { DefaultConfig.appVersionName(context) ?: "" }
     var aboutSheet by remember { mutableStateOf(false) }
 
-    // 本地备份：导出自动写入 Download/AVBox（无需选目录）；导入用 SAF 选已有文件
+    // 本地备份：导出自动写入 手机存储/AVBox/backup；恢复优先列该目录里的备份，系统选择器只作「其它位置」兜底
     var pendingImportUri by remember { mutableStateOf<Uri?>(null) }
+    var pendingImportFile by remember { mutableStateOf<File?>(null) }
     var showImportConfirm by remember { mutableStateOf(false) }
+    var showBackupPicker by remember { mutableStateOf(false) }
+    var showRestartPrompt by remember { mutableStateOf(false) }
+    var backups by remember { mutableStateOf<List<BackupEntry>>(emptyList()) }
     val importLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.OpenDocument(),
     ) { uri ->
         if (uri != null) {
+            pendingImportFile = null
             pendingImportUri = uri
             showImportConfirm = true
         }
+    }
+    LaunchedEffect(showBackupPicker) {
+        if (showBackupPicker) backups = vm.listBackups()
     }
 
     val listState = rememberScrollState()
@@ -253,6 +322,18 @@ fun SettingsPage(
             Spacer(Modifier.height(topPad - 20.dp))
 
             AppInfoHeaderCard(versionName = versionName)
+
+            if (PendingRestart.pending) {
+                SettingsGroup(title = null) {
+                    SettingsCard(SettingsCardPosition.SINGLE) {
+                        SettingsRow(
+                            title = stringResource(R.string.settings_restart_pending_title),
+                            subtitle = stringResource(R.string.settings_restart_pending_subtitle),
+                            onClick = { restartApp(context.applicationContext) },
+                        )
+                    }
+                }
+            }
 
             SettingsGroup(title = null) {
                 SettingsCard(SettingsCardPosition.FIRST) {
@@ -390,14 +471,6 @@ fun SettingsPage(
             SettingsGroup(title = null) {
                 SettingsCard(SettingsCardPosition.FIRST) {
                     SettingsRow(
-                        title = stringResource(R.string.settings_about),
-                        subtitle = stringResource(R.string.settings_about_subtitle),
-                        iconRes = R.drawable.ic_settings_about,
-                        onClick = { aboutSheet = true },
-                    )
-                }
-                SettingsCard(SettingsCardPosition.MIDDLE) {
-                    SettingsRow(
                         title = stringResource(R.string.settings_backup_export),
                         subtitle = stringResource(R.string.settings_backup_export_subtitle),
                         iconRes = R.drawable.ic_export,
@@ -442,7 +515,31 @@ fun SettingsPage(
                         title = stringResource(R.string.settings_backup_import),
                         subtitle = stringResource(R.string.settings_backup_import_subtitle),
                         iconRes = R.drawable.ic_file_choose,
-                        onClick = { importLauncher.launch(arrayOf("*/*")) },
+                        // 系统选择器的 EXTRA_INITIAL_URI 在部分机型上不生效，改为自己列 AVBox/backup；
+                        // 读该目录要"所有文件访问"，没授权先申请，仍拒绝就用系统选择器从任意位置选
+                        onClick = {
+                            if (PermissionHelper.isStorageGranted(context)) {
+                                showBackupPicker = true
+                            } else {
+                                val activity = context as? Activity
+                                if (activity == null) {
+                                    showBackupPicker = true
+                                } else {
+                                    PermissionHelper.requestStorage(activity) { granted, _ ->
+                                        if (!granted.isNullOrEmpty()) {
+                                            showBackupPicker = true
+                                        } else {
+                                            Toast.makeText(
+                                                context,
+                                                context.getString(R.string.toast_backup_no_storage_read),
+                                                Toast.LENGTH_LONG,
+                                            ).show()
+                                            importLauncher.launch(arrayOf("*/*"))
+                                        }
+                                    }
+                                }
+                            }
+                        },
                     )
                     if (showImportConfirm) {
                         AVBoxAlertDialog(
@@ -458,20 +555,25 @@ fun SettingsPage(
                                 TextButton(onClick = {
                                     showImportConfirm = false
                                     val uri = pendingImportUri
+                                    val file = pendingImportFile
                                     pendingImportUri = null
-                                    if (uri != null) {
-                                        vm.importBackup(context, uri) { result ->
-                                            val msg = when (result) {
-                                                is SyncBackup.ImportResult.Success ->
-                                                    context.getString(R.string.toast_backup_imported)
-                                                is SyncBackup.ImportResult.Empty ->
-                                                    context.getString(R.string.toast_backup_empty)
-                                                is SyncBackup.ImportResult.NeedPassword ->
-                                                    context.getString(R.string.toast_backup_need_password)
-                                                is SyncBackup.ImportResult.Failed ->
-                                                    context.getString(R.string.toast_backup_import_failed, result.message)
+                                    pendingImportFile = null
+                                    when {
+                                        file != null -> vm.importBackupFile(file) { result ->
+                                            if (result is SyncBackup.ImportResult.Success) {
+                                                PendingRestart.mark()
+                                                showRestartPrompt = true
+                                            } else {
+                                                toastImportResult(context, result)
                                             }
-                                            Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
+                                        }
+                                        uri != null -> vm.importBackup(context, uri) { result ->
+                                            if (result is SyncBackup.ImportResult.Success) {
+                                                PendingRestart.mark()
+                                                showRestartPrompt = true
+                                            } else {
+                                                toastImportResult(context, result)
+                                            }
                                         }
                                     }
                                 }) {
@@ -482,13 +584,21 @@ fun SettingsPage(
                     }
                 }
 
-
                 SettingsCard(SettingsCardPosition.MIDDLE) {
                     SettingsRow(
                         title = stringResource(R.string.settings_logs_title),
                         subtitle = stringResource(R.string.settings_logs_subtitle),
                         iconRes = R.drawable.ic_settings_log,
                         onClick = { LogViewActivity.start(context) },
+                    )
+                }
+
+                SettingsCard(SettingsCardPosition.MIDDLE) {
+                    SettingsRow(
+                        title = stringResource(R.string.settings_about),
+                        subtitle = stringResource(R.string.settings_about_subtitle),
+                        iconRes = R.drawable.ic_settings_about,
+                        onClick = { aboutSheet = true },
                     )
                 }
 
@@ -504,10 +614,30 @@ fun SettingsPage(
         }
     }
 
+    if (showBackupPicker) {
+        BackupPickerSheet(
+            backups = backups,
+            onDismiss = { showBackupPicker = false },
+            onPick = { file ->
+                showBackupPicker = false
+                pendingImportFile = file
+                pendingImportUri = null
+                showImportConfirm = true
+            },
+            onBrowseOther = {
+                showBackupPicker = false
+                importLauncher.launch(arrayOf("*/*"))
+            },
+        )
+    }
+
     if (aboutSheet) {
         AboutSheet(versionName = versionName, onDismiss = { aboutSheet = false })
     }
 
+    if (showRestartPrompt) {
+        RestartPromptDialog(R.string.settings_restart_after_backup) { showRestartPrompt = false }
+    }
 }
 
 @Composable
@@ -538,6 +668,64 @@ private fun AboutSheet(versionName: String, onDismiss: () -> Unit) {
             )
         }
     }
+}
+
+/**
+ * 恢复备份的选目录弹层：列出 AVBox/backup 里的 zip（旧版 AVBox/ 根下的也列出来），
+ * 末端给一条「其它位置…」走系统选择器。不走 SAF 的 initial URI —— 部分机型忽略它。
+ */
+@Composable
+private fun BackupPickerSheet(
+    backups: List<BackupEntry>,
+    onDismiss: () -> Unit,
+    onPick: (File) -> Unit,
+    onBrowseOther: () -> Unit,
+) {
+    AVBoxBottomSheet(
+        onDismissRequest = onDismiss,
+        title = stringResource(R.string.backup_pick_title),
+        containerColor = MaterialTheme.colorScheme.surfaceContainer,
+    ) {
+        if (backups.isEmpty()) {
+            Text(
+                text = stringResource(R.string.backup_pick_empty),
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            )
+        }
+        SettingsGroup(
+            title = null,
+            modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
+        ) {
+            backups.forEachIndexed { index, entry ->
+                SettingsCard(pickCardPosition(index, backups.size + 1)) {
+                    SettingsRow(
+                        title = entry.name,
+                        subtitle = entry.detail,
+                        onClick = { onPick(entry.file) },
+                    )
+                }
+            }
+            SettingsCard(pickCardPosition(backups.size, backups.size + 1)) {
+                SettingsRow(
+                    title = stringResource(R.string.backup_pick_other),
+                    iconRes = R.drawable.ic_file_choose,
+                    onClick = onBrowseOther,
+                )
+            }
+        }
+    }
+}
+
+private fun toastImportResult(context: Context, result: SyncBackup.ImportResult) {
+    val msg = when (result) {
+        is SyncBackup.ImportResult.Success -> context.getString(R.string.toast_backup_imported)
+        is SyncBackup.ImportResult.Empty -> context.getString(R.string.toast_backup_empty)
+        is SyncBackup.ImportResult.NeedPassword -> context.getString(R.string.toast_backup_need_password)
+        is SyncBackup.ImportResult.Failed -> context.getString(R.string.toast_backup_import_failed, result.message)
+    }
+    Toast.makeText(context, msg, Toast.LENGTH_LONG).show()
 }
 
 private const val AboutSheetHeightFraction = 0.6f
