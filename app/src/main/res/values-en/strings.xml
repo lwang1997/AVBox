@@ -176,6 +176,7 @@
     <string name="player_anime4k_tier_upscale">Upscale only</string>
     <string name="player_anime4k_unavailable">This level is unavailable on this device - skipped this time</string>
     <string name="player_anime4k_sharpen">Enhance sharpness</string>
+    <string name="player_anime4k_sharpen_real_movie_hint">Sharpening is automatically reduced in live action mode to avoid over-sharpening</string>
     <string name="player_anime4k_deblur">Deblur</string>
     <string name="player_anime4k_mode_anime">Anime</string>
     <string name="player_anime4k_mode_real_movie">Live action</string>
@@ -662,6 +663,12 @@
 
     <string name="player_info">Playback info</string>
     <string name="osd_video">Video</string>
+    <string name="osd_enhancement">Enhancement</string>
+    <string name="osd_enhancement_on">On</string>
+    <string name="osd_enhancement_auto">Auto</string>
+    <string name="osd_enhancement_session_off">Off this session</string>
+    <string name="osd_enhancement_unavailable">Unavailable</string>
+    <string name="osd_enhancement_inactive">Not applied</string>
     <string name="osd_audio">Audio</string>
     <string name="osd_decoder">Decoder</string>
     <string name="osd_network">Network</string>

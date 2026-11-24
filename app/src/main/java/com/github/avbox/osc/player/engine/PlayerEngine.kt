@@ -662,7 +662,9 @@ class PlayerEngine(
         setVideoSurface(surface)
         val frame = holder.surfaceFrame
         if (frame != null) {
-            notifyVideoOutputResolution(frame.width(), frame.height())
+            // Surface 视图尺寸只作输出面（铺满）；它不等于视频比例，不能当效果链超分目标，
+            // 否则倍率策略被 surfaceFrame 覆盖（切集换面后 canvas 变成视图尺寸的根因）。
+            notifyVideoOutputResolution(frame.width(), frame.height(), setCanvas = false)
         }
     }
 
@@ -796,10 +798,24 @@ class PlayerEngine(
     val isPictureHdrSource: Boolean
         get() = pictureHdrSource
 
-    fun notifyVideoOutputResolution(width: Int, height: Int) {
-        val exo = internalPlayer ?: return
+    /** 只设置效果链内部目标尺寸，不碰输出面（Surface 路径的铺满尺寸由 setDisplay 推）。 */
+    fun setEffectCanvasSize(width: Int, height: Int) {
         if (width <= 0 || height <= 0) return
         EffectCanvas.set(width, height)
+    }
+
+    /**
+     * 下发输出面尺寸（media3 的 LAYOUT_SCALE_TO_FIT 目标，决定铺满语义）。
+     *
+     * [setCanvas] 表示是否同时把这个尺寸当作效果链内部目标（EffectCanvas）。
+     * 纹理路径两者一致（输出缓冲就是放大后的视频尺寸）；Surface 路径的输出面是
+     * surfaceFrame 视图尺寸，不能当超分目标，否则倍率策略被视图尺寸覆盖——那种情况
+     * 由 [setEffectCanvasSize] 单独按视频尺寸×倍率设置 canvas。
+     */
+    fun notifyVideoOutputResolution(width: Int, height: Int, setCanvas: Boolean = true) {
+        val exo = internalPlayer ?: return
+        if (width <= 0 || height <= 0) return
+        if (setCanvas) EffectCanvas.set(width, height)
         val sizeChanged = width != lastOutputWidth || height != lastOutputHeight
         lastOutputWidth = width
         lastOutputHeight = height

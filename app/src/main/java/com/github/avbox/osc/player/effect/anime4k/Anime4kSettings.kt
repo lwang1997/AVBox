@@ -21,6 +21,8 @@ private const val UPSCALE_CNN_X2_S = "Anime4K_Upscale_CNN_x2_S.glsl"
 private const val UPSCALE_CNN_X2_M = "Anime4K_Upscale_CNN_x2_M.glsl"
 private const val UPSCALE_CNN_X2_L = "Anime4K_Upscale_CNN_x2_L.glsl"
 private const val UPSCALE_DEBLUR_DOG_X2 = "Anime4K_Upscale_Deblur_DoG_x2.glsl"
+private const val UPSCALE_DTD_X2 = "Anime4K_Upscale_DTD_x2.glsl"
+private const val UPSCALE_DENOISE_CNN_X2_L = "Anime4K_Upscale_Denoise_CNN_x2_L.glsl"
 
 enum class Anime4kMode(@StringRes val labelRes: Int) {
     Anime(R.string.player_anime4k_mode_anime),
@@ -69,8 +71,16 @@ enum class Anime4kTier(
             UpscaleOnly -> null
         }
 
+    // 真人素材所有档位原先共用 DoG_x2，切档只有 1:1 Soft Restore 变化、超分无差异。
+    // 按档位区分超分资产：High 走 DTD（感知锐度更好、无 CNN 棋盘格），Ultra 走降噪 CNN
+    // （顺带补上真人链缺失的降噪）。Light 无超分，Standard/UpscaleOnly 保留原 DoG 行为。
     private val realMovieUpscale: String?
-        get() = if (this == Light) null else UPSCALE_DEBLUR_DOG_X2
+        get() = when (this) {
+            Light -> null
+            Standard, UpscaleOnly -> UPSCALE_DEBLUR_DOG_X2
+            High -> UPSCALE_DTD_X2
+            Ultra -> UPSCALE_DENOISE_CNN_X2_L
+        }
 
     companion object {
 
@@ -88,12 +98,26 @@ object Anime4kSettings {
 
     const val DEFAULT_AUTO_MAX_WIDTH = 1920
 
+    /** 真人超分资产（DoG/DTD/Denoise CNN）已自带锐化，present 锐化打折避免三重叠加。 */
+    const val REAL_MOVIE_SHARPEN_SCALE = 0.35f
+
     @Volatile
     private var sharpenCached = -1f
 
     fun enabled(): Boolean = KV.get(KVKeys.ANIME4K_ENABLED, false)
 
     fun deblur(): Boolean = KV.get(KVKeys.ANIME4K_DEBLUR, false)
+
+    /**
+     * 去模糊开关是否对该模式有意义。真人模式的超分资产（DoG/DTD/Denoise CNN）
+     * 本身已含去模糊或降噪，再叠一层 1:1 Deblur_DoG 容易 ringing。
+     * 链与 UI 必须用同一判据，避免"链里忽略、UI 仍显示"的错位。
+     */
+    fun deblurApplicable(mode: Anime4kMode): Boolean = mode == Anime4kMode.Anime
+
+    /** 链里实际插入的独立去模糊开关。 */
+    fun effectiveDeblur(mode: Anime4kMode, wanted: Boolean = deblur()): Boolean =
+        deblurApplicable(mode) && wanted
 
     fun defaultMode(): Anime4kMode = Anime4kMode.current()
 
@@ -113,6 +137,10 @@ object Anime4kSettings {
         sharpenCached = clamped
         KV.put(KVKeys.ANIME4K_SHARPEN, clamped)
     }
+
+    /** present pass 实际用的锐化强度：真人模式打折，避免与超分资产自带锐化叠加过冲。 */
+    fun effectiveSharpen(mode: Anime4kMode, value: Float = sharpen()): Float =
+        if (mode == Anime4kMode.RealMovie) value * REAL_MOVIE_SHARPEN_SCALE else value
 }
 
 object Anime4kStatus {

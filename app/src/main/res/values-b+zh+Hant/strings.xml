@@ -176,6 +176,7 @@
     <string name="player_anime4k_tier_upscale">純放大</string>
     <string name="player_anime4k_unavailable">目前檔位在本機無法使用，本次播放已自動略過</string>
     <string name="player_anime4k_sharpen">增強銳度</string>
+    <string name="player_anime4k_sharpen_real_movie_hint">真人模式已自動降低銳化強度，避免畫面過銳</string>
     <string name="player_anime4k_deblur">去模糊</string>
     <string name="player_anime4k_mode_anime">動漫</string>
     <string name="player_anime4k_mode_real_movie">真人電影</string>
@@ -662,6 +663,12 @@
 
     <string name="player_info">播放資訊</string>
     <string name="osd_video">視訊</string>
+    <string name="osd_enhancement">增強</string>
+    <string name="osd_enhancement_on">生效</string>
+    <string name="osd_enhancement_auto">自動</string>
+    <string name="osd_enhancement_session_off">本次關閉</string>
+    <string name="osd_enhancement_unavailable">不可用</string>
+    <string name="osd_enhancement_inactive">未命中</string>
     <string name="osd_audio">音訊</string>
     <string name="osd_decoder">解碼器</string>
     <string name="osd_network">網路</string>

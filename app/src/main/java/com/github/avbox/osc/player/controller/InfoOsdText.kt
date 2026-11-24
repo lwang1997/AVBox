@@ -18,6 +18,11 @@ import com.github.avbox.osc.player.BasePlayerView
 import com.github.avbox.osc.player.ExoPlayer
 import com.github.avbox.osc.player.core.DecodeKindRule
 import com.github.avbox.osc.player.core.PlayerDecodeKind
+import com.github.avbox.osc.player.effect.PictureEffects
+import com.github.avbox.osc.player.effect.anime4k.Anime4kAutoPolicy
+import com.github.avbox.osc.player.effect.anime4k.Anime4kSettings
+import com.github.avbox.osc.player.effect.anime4k.Anime4kStatus
+import com.github.avbox.osc.player.effect.anime4k.Anime4kTier
 import com.github.avbox.osc.player.engine.AudioCodecChoice
 import com.github.avbox.osc.player.engine.AudioDecoderLookup
 import com.github.avbox.osc.player.core.PlayState
@@ -50,6 +55,7 @@ internal object InfoOsdText {
         val right = ArrayList<Pair<String, String>>()
 
         left.add(context.getString(R.string.osd_video) to videoText(video, exo))
+        left.add(context.getString(R.string.osd_enhancement) to enhancementText(context, video))
         left.add(context.getString(R.string.osd_decoder) to (exo?.videoDecoderName()?.takeIf { it.isNotEmpty() } ?: "-"))
         left.add(context.getString(R.string.osd_audio) to audioText(context, exo))
 
@@ -106,6 +112,50 @@ internal object InfoOsdText {
         if (bitrate.isNotEmpty()) parts.add(bitrate)
         val codecs = format.codecs
         if (!codecs.isNullOrEmpty()) parts.add(codecs)
+        return parts.joinToString(" · ")
+    }
+
+    /** 播放信息里的「增强」行：状态 · 档位 · 模式 · 输出倍率。 */
+    private fun enhancementText(context: Context, video: Format?): String {
+        val manual = Anime4kSettings.enabled()
+        val auto = Anime4kSettings.autoEnabled()
+        val wanted = manual || auto
+        val scale = if (video != null && video.width > 0 && video.height > 0) {
+            Anime4kAutoPolicy.outputScale(
+                video.width,
+                video.height,
+                manual,
+                auto,
+                Anime4kSettings.autoMaxWidth(),
+            )
+        } else {
+            1
+        }
+        // 命中判据不能读 Anime4kStatus.tierActive/autoActive：它们是 configure 时才写的
+        // 瞬态标志，切集时 onPrepare 会清零，而复用内核时 configure 未必重跑，导致明明
+        // 480p 该命中却显示「未命中」。改用稳定源实时判定：KV 开关 + 视频尺寸算出的
+        // 倍率 + build 失败标志（failed 由 build 成功/失败写入，不随切集清零）。
+        val statusRes = when {
+            !wanted -> null
+            Anime4kStatus.sessionDisabled -> R.string.osd_enhancement_session_off
+            Anime4kStatus.unavailable() -> R.string.osd_enhancement_unavailable
+            Anime4kAutoPolicy.isHit(
+                video?.width ?: 0,
+                video?.height ?: 0,
+                manual,
+                auto,
+                Anime4kSettings.autoMaxWidth(),
+            ) -> if (manual) R.string.osd_enhancement_on else R.string.osd_enhancement_auto
+            else -> R.string.osd_enhancement_inactive
+        }
+        if (statusRes == null || video == null || video.width <= 0 || video.height <= 0) {
+            return statusRes?.let { context.getString(it) } ?: "-"
+        }
+        val parts = ArrayList<String>()
+        parts.add(context.getString(statusRes))
+        parts.add(context.getString(Anime4kTier.current().labelRes))
+        parts.add(context.getString(PictureEffects.anime4kMode().labelRes))
+        parts.add(scale.toString() + "x")
         return parts.joinToString(" · ")
     }
 

@@ -17,6 +17,8 @@ import com.github.avbox.osc.player.host.EngineSurfaceRenderViewFactory
 import com.github.avbox.osc.player.host.EngineTextureRenderViewFactory
 import com.github.avbox.osc.player.host.TextureRenderHost
 import com.github.avbox.osc.player.core.PlayState
+import com.github.avbox.osc.player.effect.anime4k.Anime4kAutoPolicy
+import com.github.avbox.osc.player.effect.anime4k.Anime4kSettings
 import com.github.avbox.osc.util.ImgUtil
 import com.github.avbox.osc.util.AppLog
 import master.flame.danmaku.controller.DrawHandler
@@ -233,11 +235,28 @@ class PlayerKernelView : BasePlayerView, DrawHandler.Callback {
 
     private fun pushRenderOutputResolution() {
         val player = exoPlayer ?: return
-        if (renderView() == null || renderIsSurface) return
-        val width = videoSizePx[0]
-        val height = videoSizePx[1]
-        if (width <= 0 || height <= 0) return
-        val render = renderView()
+        val render = renderView() ?: return
+        val videoWidth = videoSizePx[0]
+        val videoHeight = videoSizePx[1]
+        if (videoWidth <= 0 || videoHeight <= 0) return
+        // Anime4K 的输出倍率必须在推送层决定。EffectCanvas（效果链内部超分目标）用
+        // 视频尺寸×倍率；输出面尺寸两种渲染路径语义不同：
+        // - 纹理路径：输出缓冲=放大后的视频尺寸，铺满由显示侧拉伸，两者都推给 media3；
+        // - Surface 路径：输出面是 surfaceFrame 视图尺寸，由 setDisplay 单独推（铺满语义），
+        //   这里只设 EffectCanvas，避免把视图尺寸当超分目标覆盖掉倍率。
+        val scale = Anime4kAutoPolicy.outputScale(
+            videoWidth,
+            videoHeight,
+            Anime4kSettings.enabled(),
+            Anime4kSettings.autoEnabled(),
+            Anime4kSettings.autoMaxWidth(),
+        )
+        val width = videoWidth * scale
+        val height = videoHeight * scale
+        if (renderIsSurface) {
+            player.setEffectCanvasSize(width, height)
+            return
+        }
         if (render is TextureRenderHost) {
             render.setOutputSize(width, height)
         }

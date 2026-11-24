@@ -176,6 +176,7 @@
     <string name="player_anime4k_tier_upscale">纯放大</string>
     <string name="player_anime4k_unavailable">当前档位在本机不可用，本次播放已自动跳过</string>
     <string name="player_anime4k_sharpen">增强锐度</string>
+    <string name="player_anime4k_sharpen_real_movie_hint">真人模式已自动降低锐化强度，避免画面过锐</string>
     <string name="player_anime4k_deblur">去模糊</string>
     <string name="player_anime4k_mode_anime">动漫</string>
     <string name="player_anime4k_mode_real_movie">真人电影</string>
@@ -662,6 +663,12 @@
 
     <string name="player_info">播放信息</string>
     <string name="osd_video">视频</string>
+    <string name="osd_enhancement">增强</string>
+    <string name="osd_enhancement_on">生效</string>
+    <string name="osd_enhancement_auto">自动</string>
+    <string name="osd_enhancement_session_off">本次关闭</string>
+    <string name="osd_enhancement_unavailable">不可用</string>
+    <string name="osd_enhancement_inactive">未命中</string>
     <string name="osd_audio">音频</string>
     <string name="osd_decoder">解码器</string>
     <string name="osd_network">网络</string>

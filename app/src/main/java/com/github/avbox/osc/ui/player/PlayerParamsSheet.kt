@@ -113,18 +113,6 @@ private fun PlaybackParams(
         ParamsGroupDivider()
         ParamsChoiceGroup(R.string.live_group_scale, sheet.scale, R.drawable.player_ic_params_scale)
         ParamsGroupDivider()
-        sheet.onPictureInPicture?.let { onPip ->
-            SheetButton(
-                text = stringResource(R.string.player_picture_in_picture),
-                iconRes = R.drawable.player_ic_pip,
-                onClick = {
-                    onDismiss()
-                    onPip()
-                },
-                modifier = Modifier.fillMaxWidth(),
-            )
-            ParamsGroupDivider()
-        }
         SheetButton(
             text = stringResource(R.string.player_info),
             iconRes = R.drawable.ic_settings_about,
