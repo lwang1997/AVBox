@@ -354,6 +354,8 @@
     <string name="detail_episodes_of">%1$s 选集</string>
     <string name="detail_order_asc">正序</string>
     <string name="detail_order_desc">倒序</string>
+    <string name="detail_episode_style_grid">宫格</string>
+    <string name="detail_episode_style_wide">单列</string>
     <string name="detail_switch_source">换源</string>
     <string name="detail_finding_source">寻找片源中…</string>
     <string name="detail_recommend">相关推荐</string>

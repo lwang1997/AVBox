@@ -1,6 +1,7 @@
 package com.github.avbox.osc.ui
 
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -49,13 +50,18 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.nestedscroll.NestedScrollConnection
+import androidx.compose.ui.input.nestedscroll.NestedScrollSource
+import androidx.compose.ui.input.nestedscroll.nestedScroll
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Velocity
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil3.compose.AsyncImage
@@ -76,7 +82,30 @@ private const val EpisodeGridRowsPerPage = 3
 private val EpisodeGridChipHeight = 44.dp
 private val EpisodeGridSpacing = 8.dp
 
+private const val WideEpisodeRowsPerPage = 5
+private val WideEpisodeRowHeight = 48.dp
+
 private const val EpisodeSheetHeightFraction = 0.6f
+
+/**
+ * 只有当选集区内容确实超出限高、需要内部滚动时，才拦截纵向滚动继续传给父级详情页。
+ * 内容不足时放行，避免用户在选集区滑动却滚不动整个页面。
+ */
+@Composable
+private fun rememberConfineEpisodeScroll(scrollState: ScrollState): NestedScrollConnection {
+    return remember(scrollState) {
+        object : NestedScrollConnection {
+            override fun onPostScroll(
+                consumed: Offset,
+                available: Offset,
+                source: NestedScrollSource,
+            ): Offset = if (scrollState.maxValue > 0) Offset(0f, available.y) else Offset.Zero
+
+            override suspend fun onPostFling(consumed: Velocity, available: Velocity): Velocity =
+                if (scrollState.maxValue > 0) Velocity(0f, available.y) else Velocity.Zero
+        }
+    }
+}
 
 @Composable
 internal fun EpisodeRow(
@@ -86,6 +115,28 @@ internal fun EpisodeRow(
     playIndex: Int,
     currentFlag: String?,
 ) {
+    val seasonHint = remember(info.name, currentFlag) {
+        vm.seasonHintFor(info.name, currentFlag)
+    }
+    val episodeNumbers = remember(episodes, info.reverseSort) {
+        episodes.map { EpisodeMatcher.extractEpisodeNumber(it.name) }
+    }
+    val episodeLabels = remember(episodes) {
+        episodes.map { EpisodeMatcher.extractEpisodeLabel(it.name) }
+    }
+    val episodeMeta = rememberEpisodeMeta(
+        vm,
+        info.name,
+        info.en,
+        info.year,
+        episodes.size,
+        seasonHint,
+        episodeNumbers,
+        info.reverseSort,
+    )
+    val hasThumbnails = !episodeMeta.isNullOrEmpty()
+    val episodeListWide by vm.episodeListWide.collectAsState()
+
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -115,6 +166,18 @@ internal fun EpisodeRow(
                 text = stringResource(if (info.reverseSort) R.string.detail_order_asc else R.string.detail_order_desc),
                 onClick = { vm.toggleReverse() },
             )
+            if (!hasThumbnails) {
+                Spacer(Modifier.width(2.dp))
+                PillAction(
+                    iconRes = if (episodeListWide) {
+                        R.drawable.ic_layout_horizontal
+                    } else {
+                        R.drawable.ic_layout_vertical
+                    },
+                    text = stringResource(if (episodeListWide) R.string.detail_episode_style_grid else R.string.detail_episode_style_wide),
+                    onClick = { vm.toggleEpisodeListStyle() },
+                )
+            }
             Spacer(Modifier.width(2.dp))
             PillAction(
                 iconRes = R.drawable.ic_episode_grid_all,
@@ -122,23 +185,7 @@ internal fun EpisodeRow(
                 onClick = { vm.showEpisodeSheet() },
             )
         }
-        val seasonHint = remember(info.name, currentFlag) {
-            vm.seasonHintFor(info.name, currentFlag)
-        }
-        val episodeNumbers = remember(episodes, info.reverseSort) {
-            episodes.map { EpisodeMatcher.extractEpisodeNumber(it.name) }
-        }
-        val episodeMeta = rememberEpisodeMeta(
-            vm,
-            info.name,
-            info.en,
-            info.year,
-            episodes.size,
-            seasonHint,
-            episodeNumbers,
-            info.reverseSort,
-        )
-        if (!episodeMeta.isNullOrEmpty()) {
+        if (hasThumbnails) {
             ThumbnailEpisodeRow(
                 episodes = episodes,
                 episodeNumbers = episodeNumbers,
@@ -148,9 +195,18 @@ internal fun EpisodeRow(
                 currentFlag = currentFlag,
                 onClick = { vm.onEpisodeClick(it) },
             )
+        } else if (episodeListWide) {
+            WideEpisodeList(
+                episodes = episodes,
+                playIndex = playIndex,
+                reverseSort = info.reverseSort,
+                currentFlag = currentFlag,
+                onClick = { vm.onEpisodeClick(it) },
+            )
         } else {
             CompactEpisodeGrid(
                 episodes = episodes,
+                episodeLabels = episodeLabels,
                 playIndex = playIndex,
                 reverseSort = info.reverseSort,
                 currentFlag = currentFlag,
@@ -203,6 +259,7 @@ private fun ThumbnailEpisodeRow(
 @Composable
 private fun CompactEpisodeGrid(
     episodes: List<VodInfo.VodSeries>,
+    episodeLabels: List<String>,
     playIndex: Int,
     reverseSort: Boolean,
     currentFlag: String?,
@@ -222,9 +279,9 @@ private fun CompactEpisodeGrid(
             (EpisodeGridMinCardWidth + EpisodeGridSpacing) + 0.01f)
             .toInt()
             .coerceAtLeast(1)
-        val visible = episodes.take(columns * EpisodeGridRowsPerPage)
+        // 渲染全部集数，超出限高部分在区域内滚动翻页（不再只取前 15 集）
         // 总集数不足一行时把卡片拉宽铺满整屏，避免一两个小按钮挤在角落
-        val perRow = minOf(columns, visible.size)
+        val perRow = minOf(columns, episodes.size)
         // 多扣一个间距作余量：正好铺满时浮点误差会把末尾一张挤到下一行
         val cardWidth = if (perRow == 1) {
             maxWidth
@@ -233,13 +290,14 @@ private fun CompactEpisodeGrid(
         }
 
         val scrollState = rememberScrollState()
+        val scrollConnection = rememberConfineEpisodeScroll(scrollState)
         var prevReverseSort by remember { mutableStateOf(reverseSort) }
-        LaunchedEffect(playIndex, currentFlag, visible.size, reverseSort, columns) {
+        LaunchedEffect(playIndex, currentFlag, episodes.size, reverseSort, columns) {
             if (reverseSort != prevReverseSort) {
                 prevReverseSort = reverseSort
                 scrollState.scrollTo(0)
             } else if (playIndex >= 0) {
-                val row = minOf(playIndex, visible.lastIndex) / columns
+                val row = minOf(playIndex, episodes.lastIndex) / columns
                 scrollState.scrollTo(((EpisodeGridChipHeight + EpisodeGridSpacing) * row).value.toInt())
             }
         }
@@ -247,19 +305,103 @@ private fun CompactEpisodeGrid(
         FlowRow(
             modifier = Modifier
                 .heightIn(max = maxGridHeight)
+                .nestedScroll(scrollConnection)
                 .verticalScroll(scrollState),
             horizontalArrangement = Arrangement.spacedBy(EpisodeGridSpacing),
             verticalArrangement = Arrangement.spacedBy(EpisodeGridSpacing),
         ) {
-            visible.forEachIndexed { index, ep ->
+            episodes.forEachIndexed { index, _ ->
                 EpisodeNumberCard(
-                    name = ep.name ?: (index + 1).toString(),
+                    name = episodeLabels.getOrNull(index)?.takeIf { it.isNotEmpty() } ?: (index + 1).toString(),
                     selected = index == playIndex,
                     onClick = { onClick(index) },
                     modifier = Modifier.width(cardWidth),
                 )
             }
         }
+    }
+}
+
+@Composable
+private fun WideEpisodeList(
+    episodes: List<VodInfo.VodSeries>,
+    playIndex: Int,
+    reverseSort: Boolean,
+    currentFlag: String?,
+    onClick: (Int) -> Unit,
+) {
+    if (episodes.isEmpty()) return
+    val maxListHeight = WideEpisodeRowHeight * WideEpisodeRowsPerPage +
+        EpisodeGridSpacing * (WideEpisodeRowsPerPage - 1)
+
+    val scrollState = rememberScrollState()
+    val scrollConnection = rememberConfineEpisodeScroll(scrollState)
+    var prevReverseSort by remember { mutableStateOf(reverseSort) }
+    LaunchedEffect(playIndex, currentFlag, episodes.size, reverseSort) {
+        if (reverseSort != prevReverseSort) {
+            prevReverseSort = reverseSort
+            scrollState.scrollTo(0)
+        } else if (playIndex >= 0) {
+            val row = minOf(playIndex, episodes.lastIndex)
+            scrollState.scrollTo(((WideEpisodeRowHeight + EpisodeGridSpacing) * row).value.toInt())
+        }
+    }
+
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .heightIn(max = maxListHeight)
+            .nestedScroll(scrollConnection)
+            .verticalScroll(scrollState)
+            .padding(horizontal = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(EpisodeGridSpacing),
+    ) {
+        episodes.forEachIndexed { index, ep ->
+            WideEpisodeRow(
+                name = ep.name ?: (index + 1).toString(),
+                selected = index == playIndex,
+                onClick = { onClick(index) },
+            )
+        }
+    }
+}
+
+@Composable
+private fun WideEpisodeRow(
+    name: String,
+    selected: Boolean,
+    onClick: () -> Unit,
+) {
+    val shape = RoundedCornerShape(10.dp)
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(WideEpisodeRowHeight)
+            .detailGlass(shape)
+            .then(
+                if (selected) {
+                    Modifier.border(1.5.dp, MaterialTheme.colorScheme.primary, shape)
+                } else {
+                    Modifier
+                },
+            )
+            .clickable(onClick = onClick)
+            .padding(horizontal = 14.dp),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(
+            text = name,
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = if (selected) {
+                MaterialTheme.colorScheme.primary
+            } else {
+                MaterialTheme.colorScheme.onSurface
+            },
+            maxLines = 1,
+            textAlign = TextAlign.Center,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 

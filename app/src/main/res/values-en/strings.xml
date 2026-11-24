@@ -354,6 +354,8 @@
     <string name="detail_episodes_of">%1$s Episodes</string>
     <string name="detail_order_asc">Ascending</string>
     <string name="detail_order_desc">Descending</string>
+    <string name="detail_episode_style_grid">Grid</string>
+    <string name="detail_episode_style_wide">List</string>
     <string name="detail_switch_source">Switch source</string>
     <string name="detail_finding_source">Finding sources…</string>
     <string name="detail_recommend">Related</string>
