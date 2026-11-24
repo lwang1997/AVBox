@@ -37,6 +37,10 @@ import com.github.avbox.osc.util.AppLog
 import com.github.avbox.osc.util.LanguageManager
 import com.github.avbox.osc.util.ScreenUtils
 import java.lang.ref.WeakReference
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.TimeUnit
+
+import org.json.JSONObject
 
 class PlaybackService : Service() {
 
@@ -518,8 +522,52 @@ class PlaybackService : Service() {
                     override fun onProgressKeysCleared(keys: List<String>) {
                         peek()?.markZeroStartKeys(keys)
                     }
+
+                    override fun mediaJson(): String? = buildMediaJson()
                 }
             }
+        }
+
+        /** spider.jar 的 /media 端点：返回当前播放的时长/进度/标题等（jar 用 duration 判断类型）。 */
+        private fun buildMediaJson(): String? {
+            val current = peek() ?: return null
+            val mainHandler = Handler(Looper.getMainLooper())
+            val latch = CountDownLatch(1)
+            var result: String? = null
+            mainHandler.post {
+                try {
+                    result = mediaJsonOf(current)
+                } catch (th: Throwable) {
+                    AppLog.i("echo-media-json error: " + th.message)
+                } finally {
+                    latch.countDown()
+                }
+            }
+            try {
+                latch.await(600, TimeUnit.MILLISECONDS)
+            } catch (ignored: InterruptedException) {
+                Thread.currentThread().interrupt()
+            }
+            return result
+        }
+
+        private fun mediaJsonOf(engine: PlaybackEngine): String {
+            val controller = engine.controller()
+            val bridge = engine.headlessBridge()
+            val vod = controller.vod()
+            val series = if (vod == null) null else controller.currentSeries(vod.playFlag, vod.playIndex)
+            val json = JSONObject().apply {
+                put("state", if (bridge.isPlaying()) 3 else 2)
+                put("speed", 1.0)
+                put("duration", bridge.duration())
+                put("position", bridge.currentPosition())
+                put("url", bridge.currentUrl() ?: "")
+                put("title", vod?.name ?: "")
+                put("artist", series?.name ?: "")
+                put("artwork", vod?.pic ?: "")
+            }.toString()
+            AppLog.i("echo-media-json: duration=" + bridge.duration() + " position=" + bridge.currentPosition())
+            return json
         }
 
         @JvmStatic

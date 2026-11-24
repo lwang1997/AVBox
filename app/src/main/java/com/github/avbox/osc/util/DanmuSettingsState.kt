@@ -7,6 +7,7 @@ import androidx.compose.runtime.setValue
 
 data class DanmuSettingsConfig(
     val open: Boolean,
+    val autoSearch: Boolean,
     val maxLine: Int,
     val speed: Float,
     val alpha: Float,
@@ -29,6 +30,7 @@ object DanmuSettingsState {
 
     private fun load(): DanmuSettingsConfig = DanmuSettingsConfig(
         open = KV.get(KVKeys.DANMU_OPEN, true),
+        autoSearch = KV.get(KVKeys.DANMU_AUTO_SEARCH, true),
         maxLine = clamp(KV.get(KVKeys.DANMU_MAX_LINE, 3), 1, 15),
         speed = KV.get(KVKeys.DANMU_SPEED, 1.5f),
         alpha = clamp(KV.get(KVKeys.DANMU_ALPHA, 1.0f), 0.1f, 1.0f),
@@ -42,6 +44,13 @@ object DanmuSettingsState {
         set(value) {
             KV.put(KVKeys.DANMU_OPEN, value)
             current = current.copy(open = value)
+        }
+
+    var autoSearch: Boolean
+        get() = current.autoSearch
+        set(value) {
+            KV.put(KVKeys.DANMU_AUTO_SEARCH, value)
+            current = current.copy(autoSearch = value)
         }
 
     var maxLine: Int

@@ -74,6 +74,7 @@
 
     <string name="danmu_settings">Danmaku Settings</string>
     <string name="danmu_online">Online Danmaku</string>
+    <string name="danmu_auto_search">Auto Search</string>
     <string name="danmu_color">Danmaku Color</string>
     <string name="danmu_color_random">Random</string>
     <string name="danmu_speed">Danmaku Speed</string>
@@ -151,6 +152,7 @@
     <string name="player_menu_video_track">Video</string>
     <string name="player_menu_danmu">Danmaku</string>
     <string name="player_menu_search_danmu">Search Danmaku</string>
+    <string name="player_menu_line_danmu">Line Danmaku</string>
     <string name="player_menu_params">Playback settings</string>
     <string name="player_menu_more">More</string>
     <string name="player_menu_parse">Parse</string>
@@ -532,12 +534,20 @@
     <string name="log_level_debug">Debug</string>
     <string name="log_level_error">Error</string>
     <string name="log_level_none">None</string>
+    <string name="log_file_save">Save logs to file</string>
+    <string name="log_file_path">Saved to: %1$s</string>
+    <string name="log_clear">Clear logs</string>
+    <string name="log_cleared">Logs cleared</string>
     <string name="settings_detail_play">Detail page playback</string>
     <string name="settings_detail_play_fullscreen">Go fullscreen</string>
     <string name="settings_detail_play_inline">Stay inline</string>
     <string name="player_fullscreen">Fullscreen</string>
     <string name="settings_danmu_switch">Danmaku Switch</string>
+    <string name="settings_danmu_auto_search">Auto-search Danmaku</string>
+    <string name="settings_danmu_auto_search_desc">When off, danmaku is not searched automatically; only danmaku provided by the source is used</string>
     <string name="settings_danmu_api">Danmaku API</string>
+    <string name="settings_danmu_api_desc">Leave empty to use the danmaku API provided by the current line</string>
+    <string name="settings_danmu_api_line">From line</string>
     <string name="settings_long_press_speed">Long-press Speed</string>
     <string name="settings_buffer_time">Buffer Time</string>
     <string name="settings_search_threads">Search Threads</string>

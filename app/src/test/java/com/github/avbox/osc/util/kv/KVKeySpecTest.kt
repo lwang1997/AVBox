@@ -79,6 +79,14 @@ class KVKeySpecTest {
     }
 
     @Test
+    fun danmuAutoSearch_isRegistered() {
+        assertEquals(
+            TypeToken.get(java.lang.Boolean::class.java).type,
+            spec.typeOf(KVKeys.DANMU_AUTO_SEARCH),
+        )
+    }
+
+    @Test
     fun collectColumns_isRegistered() {
         assertEquals(
             TypeToken.get(Integer::class.java).type,

@@ -1,5 +1,6 @@
 package com.github.avbox.osc.ui.page
 
+import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.widget.Toast
@@ -37,10 +38,12 @@ import com.github.avbox.osc.ui.components.SettingsCardPosition
 import com.github.avbox.osc.ui.components.SettingsGroup
 import com.github.avbox.osc.ui.components.SettingsOptionMenuRow
 import com.github.avbox.osc.ui.components.SettingsRow
+import com.github.avbox.osc.ui.components.SettingsSwitchRow
 import com.github.avbox.osc.ui.components.TopBarActionBox
 import com.github.avbox.osc.util.AppLog
 import com.github.avbox.osc.util.KV
 import com.github.avbox.osc.util.KVKeys
+import com.github.avbox.osc.util.PermissionHelper
 import kotlinx.coroutines.delay
 import java.io.File
 import java.text.SimpleDateFormat
@@ -52,6 +55,8 @@ fun LogViewScreen(onNavigateBack: () -> Unit) {
     val context = LocalContext.current
     var level by remember { mutableStateOf(KV.get(KVKeys.LOG_LEVEL, 0)) }
     var lines by remember { mutableStateOf(AppLog.snapshot()) }
+    var fileEnabled by remember { mutableStateOf(AppLog.isFileLogEnabled()) }
+    var logFilePath by remember(fileEnabled) { mutableStateOf(AppLog.fileLogPath()) }
 
     LaunchedEffect(Unit) {
         while (true) {
@@ -108,6 +113,39 @@ fun LogViewScreen(onNavigateBack: () -> Unit) {
                         onSelect = { idx ->
                             level = idx
                             KV.put(KVKeys.LOG_LEVEL, idx)
+                        },
+                    )
+                }
+                SettingsCard(SettingsCardPosition.MIDDLE) {
+                    SettingsSwitchRow(
+                        title = stringResource(R.string.log_file_save),
+                        subtitle = logFilePath.takeIf { it.isNotEmpty() }
+                            ?.let { stringResource(R.string.log_file_path, it) },
+                        leadingIconRes = R.drawable.ic_settings_log,
+                        checked = fileEnabled,
+                        onCheckedChange = { enabled ->
+                            fileEnabled = enabled
+                            AppLog.setFileLogEnabled(enabled)
+                            if (enabled) {
+                                // 写存储根目录需要"所有文件访问"；未授权时先申请，拒绝则退回应用外部目录
+                                val activity = context as? Activity
+                                if (activity != null && !PermissionHelper.isStorageGranted(activity)) {
+                                    PermissionHelper.requestStorage(activity) { _, _ ->
+                                        logFilePath = AppLog.fileLogPath()
+                                    }
+                                }
+                            }
+                        },
+                    )
+                }
+                SettingsCard(SettingsCardPosition.MIDDLE) {
+                    SettingsRow(
+                        title = stringResource(R.string.log_clear),
+                        leadingIconRes = R.drawable.ic_delete,
+                        onClick = {
+                            AppLog.clearAll()
+                            lines = AppLog.snapshot()
+                            Toast.makeText(context, context.getString(R.string.log_cleared), Toast.LENGTH_SHORT).show()
                         },
                     )
                 }

@@ -17,11 +17,18 @@ class ProxyEntry(private val owner: ApiConfig, private val spiderLoader: SpiderL
     private var currentPlaySourceKey = ""
 
     fun proxyLocal(param: MutableMap<String, String>): Array<Any?>? {
+        val action = param["do"]
+        // 弹幕代理（appdanmu/danmaku/danmu）由 spider.jar 的 Proxy/Danmu 处理，站点自身的 py/js 代理不实现它；
+        // 之前按站点类型路由会把请求交给 py/js 的 localProxy（通常返回空），线路弹幕因此永远是空包。
+        if (isDanmakuAction(action)) {
+            val result = proxyDanmakuByJar(param)
+            if (result != null) return result
+        }
+
         val source = currentProxySource(param)
         val api = source.api ?: return null
 
         val siteKey = param["siteKey"]
-        val action = param["do"]
 
         val isJs = "js" == action
         val isPy = "py" == action
@@ -99,6 +106,28 @@ class ProxyEntry(private val owner: ApiConfig, private val spiderLoader: SpiderL
         }
 
         return spiderLoader.proxyInvokeJar(param)
+    }
+
+    private fun isDanmakuAction(action: String?): Boolean {
+        return action == "appdanmu" || action == "danmaku" || action == "danmu"
+    }
+
+    /**
+     * 弹幕代理统一交给 spider.jar（jar 的 Proxy.proxy 按 do 分发到 Danmu.AppDanmu / Danmaku / Danmu）。
+     * jar 参数里不接受 siteKey（JarLoader 会按它找站点 jar，py/js 站点没有对应 jar），所以临时摘掉。
+     */
+    private fun proxyDanmakuByJar(param: MutableMap<String, String>): Array<Any?>? {
+        val siteKey = param.remove("siteKey")
+        try {
+            val result = spiderLoader.proxyInvokeJar(param)
+            AppLog.i("echo-proxy-danmu-route: jar " + (if (result == null) "miss" else describeResult(result)))
+            return result
+        } catch (th: Throwable) {
+            AppLog.e("echo-proxy-danmu-route: jar error | " + th)
+            return null
+        } finally {
+            if (siteKey != null) param["siteKey"] = siteKey
+        }
     }
 
     private fun proxyDirect(param: MutableMap<String, String>): Array<Any?>? {

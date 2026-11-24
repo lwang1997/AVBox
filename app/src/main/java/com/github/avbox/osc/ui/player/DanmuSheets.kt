@@ -48,6 +48,9 @@ fun DanmuSettingSheet(sheet: DanmuSettingSheetState, onDismiss: () -> Unit) {
             var size by remember { mutableIntStateOf(Math.round(DanmuSettingsState.config.sizeScale * 10)) }
             var line by remember { mutableIntStateOf(DanmuSettingsState.config.maxLine) }
             var alpha by remember { mutableIntStateOf(Math.round(DanmuSettingsState.config.alpha * 100)) }
+            var autoSearchIdx by remember {
+                mutableIntStateOf(if (DanmuSettingsState.config.autoSearch) 0 else 1)
+            }
             Spacer(Modifier.height(playerDim(R.dimen.vs_24)))
             SheetHeaderRow(title = stringResource(R.string.danmu_settings)) {
                 SheetTextAction(
@@ -61,6 +64,7 @@ fun DanmuSettingSheet(sheet: DanmuSettingSheetState, onDismiss: () -> Unit) {
                         size = Math.round(DanmuSettingsState.config.sizeScale * 10)
                         line = DanmuSettingsState.config.maxLine
                         alpha = Math.round(DanmuSettingsState.config.alpha * 100)
+                        autoSearchIdx = if (DanmuSettingsState.config.autoSearch) 0 else 1
                     },
                 )
             }
@@ -78,6 +82,21 @@ fun DanmuSettingSheet(sheet: DanmuSettingSheetState, onDismiss: () -> Unit) {
                     modifier = Modifier.weight(1f),
                 )
             }
+                SheetLabelRow(stringResource(R.string.danmu_auto_search)) {
+                    SheetChipRow(
+                        listOf(
+                            stringResource(R.string.common_on),
+                            stringResource(R.string.common_off),
+                        ),
+                        autoSearchIdx,
+                        onSelect = { idx ->
+                            val enabled = idx == 0
+                            val wasEnabled = autoSearchIdx == 0
+                            autoSearchIdx = if (enabled) 0 else 1
+                            DanmuSettingsState.autoSearch = enabled
+                            if (enabled && !wasEnabled) sheet.onAutoSearchEnabled()
+                        })
+                }
                 SheetLabelRow(stringResource(R.string.danmu_color)) {
                     SheetChipRow(
                         listOf(

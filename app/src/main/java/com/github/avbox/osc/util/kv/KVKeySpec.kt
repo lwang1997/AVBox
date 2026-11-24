@@ -122,6 +122,7 @@ class KVKeySpec : KVDecoder.TypeRegistry {
             register(KVKeys.ISO_PGS, true)
             register(KVKeys.PLAY_CACHE, false)
             register(KVKeys.DANMU_OPEN, false)
+            register(KVKeys.DANMU_AUTO_SEARCH, false)
             register(KVKeys.DANMU_RANDOM_COLOR, false)
             register(KVKeys.DANMU_API_USE_DEFAULT, false)
             register(KVKeys.LIQUID_GLASS_NAVBAR, false)

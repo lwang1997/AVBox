@@ -121,7 +121,10 @@ class JarLoader {
             val clz = loader.loadClass("com.github.catvod.spider.Init")
             val method = clz.getMethod("init", Context::class.java)
             method.invoke(null, AppContextHolder.context())
+            AppLog.i("echo--jar-init done")
+            probeCompanionService()
         } catch (e: Throwable) {
+            AppLog.e("echo--jar-init error: " + e.javaClass.simpleName + ":" + e.message)
             AppLog.e("JarLoader", e)
         }
     }
@@ -502,5 +505,41 @@ class JarLoader {
 
         private const val TAG: String = "JarLoader"
         private const val MAIN_KEY: String = "main"
+
+        /** spider.jar 自带 pvideo 代理（弹幕 danmu 接口、直播弹幕、媒体缓存）的默认端口。 */
+        internal const val COMPANION_PORT: Int = 5266
+
+        private val companionProbeStarted = java.util.concurrent.atomic.AtomicBoolean(false)
+
+        /**
+         * 探测 jar 的本地服务是否起来：spider.jar 的 Init.init 会下载并执行 pvideo-<abi> -port 5266，
+         * 这里在 init 后分 3 次（5/15/30 秒）连接一次，把结果写进应用日志，便于判断"服务起不来"。
+         */
+        private fun probeCompanionService() {
+            if (!companionProbeStarted.compareAndSet(false, true)) return
+            Thread {
+                val steps = longArrayOf(5000L, 10000L, 15000L)
+                for (step in steps) {
+                    try {
+                        Thread.sleep(step)
+                    } catch (ignored: InterruptedException) {
+                        return@Thread
+                    }
+                    val open = try {
+                        java.net.Socket().use { socket ->
+                            socket.connect(java.net.InetSocketAddress("127.0.0.1", COMPANION_PORT), 1500)
+                            true
+                        }
+                    } catch (th: Throwable) {
+                        false
+                    }
+                    AppLog.i("echo-jar-service: " + COMPANION_PORT + " " + if (open) "open" else "closed")
+                    if (open) return@Thread
+                }
+            }.apply {
+                isDaemon = true
+                name = "jar-service-probe"
+            }.start()
+        }
     }
 }

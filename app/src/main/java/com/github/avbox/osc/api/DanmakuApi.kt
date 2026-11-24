@@ -4,6 +4,7 @@ import android.text.TextUtils
 
 import androidx.collection.ArrayMap
 
+import com.github.catvod.Proxy
 import com.github.catvod.crawler.js.Trans
 import com.github.catvod.net.OkHttp
 import com.github.avbox.osc.R
@@ -68,6 +69,53 @@ class DanmakuApi {
             return DanmuSettingsState.config.open && !TextUtils.isEmpty(getApiUrl())
         }
 
+        /** 用户自设的弹幕接口；未设置（或选择内置）时为空。 */
+        @JvmStatic
+        fun customApiUrl(): String {
+            if (isUseDefault()) return ""
+            val custom = KV.get(KVKeys.DANMU_API, "")
+            return if (custom == null) "" else custom.trim { it <= ' ' }
+        }
+
+        /**
+         * 线路配置（api.json）自带的弹幕接口；没有时为空。
+         * 线路常用 `http://127.0.0.1:9978/proxy?do=danmaku&name={name}&episode={episode}`，
+         * 这里把写死的 9978 换成实际本地服务端口，避免端口被占用后接口失效。
+         */
+        @JvmStatic
+        fun lineApiUrl(): String {
+            val url = ApiConfig.get().getDanmaku().trim { it <= ' ' }
+            if (!url.contains("127.0.0.1:9978")) return url
+            return url.replace("127.0.0.1:9978", "127.0.0.1:" + Proxy.getPort())
+        }
+
+        /** 实际生效的接口：用户自设 > 线路自带 > 空（空表示只有内置兜底）。 */
+        @JvmStatic
+        fun effectiveApiUrl(): String {
+            if (isUseDefault()) return BUILTIN_API
+            val custom = customApiUrl()
+            if (!TextUtils.isEmpty(custom)) return custom
+            return lineApiUrl()
+        }
+
+        @JvmStatic
+        fun canOpenSearch(): Boolean {
+            return DanmuSettingsState.config.open && !TextUtils.isEmpty(getApiUrl())
+        }
+
+        /** 单个接口地址的来源标签（仅用于诊断日志）。 */
+        private fun apiLabel(url: String): String = when {
+            url == BUILTIN_API -> "builtin"
+            url == customApiUrl() -> "user"
+            url == lineApiUrl() -> "line"
+            else -> "custom"
+        }
+
+        private fun apiSummary(url: String): String {
+            val text = if (url.length > 180) url.substring(0, 180) + "..." else url
+            return "source=" + apiLabel(url) + ", url=" + text
+        }
+
         @JvmStatic
         fun isUseDefault(): Boolean {
             return KV.get(KVKeys.DANMU_API_USE_DEFAULT, false)
@@ -75,8 +123,36 @@ class DanmakuApi {
 
         @JvmStatic
         suspend fun search(name: String?, episode: String?): String? {
-            val apiUrl = getApiUrl()
-            if (TextUtils.isEmpty(apiUrl)) return null
+            val sources = searchSources()
+            if (sources.isEmpty()) return null
+            for (index in sources.indices) {
+                val apiUrl = sources[index]
+                AppLog.i(
+                    "echo-danmu search api (" + (index + 1) + "/" + sources.size + "): " + apiSummary(apiUrl),
+                )
+                val url = searchOnce(apiUrl, name, episode)
+                if (!TextUtils.isEmpty(url)) {
+                    AppLog.i("echo-danmu search hit (" + (index + 1) + "/" + sources.size + ")")
+                    return url
+                }
+                if (index < sources.lastIndex) AppLog.i("echo-danmu search empty, fallback to next source")
+            }
+            return null
+        }
+
+        /** 自动搜索的兜底顺序：用户自设接口 → 线路接口 → 内置（仅两者都为空时）。 */
+        private fun searchSources(): List<String> {
+            if (isUseDefault()) return listOf(BUILTIN_API)
+            val sources = ArrayList<String>()
+            val custom = customApiUrl()
+            val line = lineApiUrl()
+            if (!TextUtils.isEmpty(custom)) sources.add(custom)
+            if (!TextUtils.isEmpty(line) && line != custom) sources.add(line)
+            if (sources.isEmpty()) sources.add(BUILTIN_API)
+            return sources
+        }
+
+        private suspend fun searchOnce(apiUrl: String, name: String?, episode: String?): String? {
             val seq = nextSearch()
             return withContext(Dispatchers.IO) {
                 try {
@@ -102,11 +178,14 @@ class DanmakuApi {
                 val apiUrl = getApiUrl()
                 if (TextUtils.isEmpty(apiUrl)) throw DanmakuException(str(R.string.danmu_search_api_empty))
                 try {
-                    if (!hasPlaceholder(apiUrl) && !isDanmakuSearchApi(apiUrl)) {
+                    AppLog.i("echo-danmu list api: " + apiSummary(apiUrl))
+                    val list = if (!hasPlaceholder(apiUrl) && !isDanmakuSearchApi(apiUrl)) {
                         searchBuiltinList(apiUrl, name, seq)
                     } else {
                         parseSearchList(requestText(newCall(apiUrl, name, episode), seq, true))
                     }
+                    AppLog.i("echo-danmu list count=" + list.size)
+                    list
                 } catch (e: CancellationException) {
                     throw e
                 } catch (th: Throwable) {
@@ -120,7 +199,10 @@ class DanmakuApi {
         suspend fun loadSearchResult(result: DanmuSearchResult?): String {
             val seq = nextSearch()
             if (result == null || TextUtils.isEmpty(result.url)) throw DanmakuException(str(R.string.danmu_url_empty))
-            if (!result.isBuiltIn) return result.url
+            if (!result.isBuiltIn) {
+                AppLog.i("echo-danmu pick: " + safeLog(result.name))
+                return result.url
+            }
             return withContext(Dispatchers.IO) {
                 val body = try {
                     requestText(OkHttp.newCall(OkHttp.client(BUILTIN_TIMEOUT), result.url, TAG), seq, true)
@@ -346,12 +428,8 @@ class DanmakuApi {
         }
 
         private fun getApiUrl(): String {
-            if (isUseDefault()) return BUILTIN_API
-            val custom = KV.get(KVKeys.DANMU_API, "")
-            if (!TextUtils.isEmpty(custom)) return custom.trim { it <= ' ' }
-            val config = ApiConfig.get().getDanmaku().trim { it <= ' ' }
-            if (!TextUtils.isEmpty(config)) return config
-            return BUILTIN_API
+            val effective = effectiveApiUrl()
+            return if (TextUtils.isEmpty(effective)) BUILTIN_API else effective
         }
 
         private fun hasPlaceholder(apiUrl: String?): Boolean {

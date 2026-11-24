@@ -55,6 +55,7 @@ class RemoteServer(port: Int, context: Context) : NanoHTTPD(port) {
     }
 
     private fun addGetRequestProcess() {
+        getRequestList.add(MediaRequestProcess())
         getRequestList.add(CacheRequestProcess())
     }
 

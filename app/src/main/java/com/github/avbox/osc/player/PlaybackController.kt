@@ -918,6 +918,10 @@ class PlaybackController {
         fetch.release()
     }
 
+    fun searchDanmuForCurrentEpisode() {
+        fetch.searchDanmuForCurrentEpisode()
+    }
+
     fun viewBridge(): PlaybackViewBridge? = view
 
     fun setCurrentArtwork(artwork: String?) {

@@ -24,6 +24,11 @@ class PlayContainerControlListener(private val container: PlayContainer) : VodCo
                     container.applyDanmuSettings(false)
                 },
                 onSettingsApplied = { forColor -> container.applyDanmuSettings(forColor) },
+                onAutoSearchEnabled = {
+                    if (TextUtils.isEmpty(container.scheduler.playDanmu())) {
+                        container.scheduler.searchDanmuForCurrentEpisode()
+                    }
+                },
             ),
         )
     }
@@ -35,6 +40,11 @@ class PlayContainerControlListener(private val container: PlayContainer) : VodCo
 
     override fun showEpisodes() {
         container.pageHostRef?.showEpisodeSheet()
+    }
+
+    override fun searchDanmuBuiltin() {
+        if (!container.isAttached()) return
+        container.openDanmuSearchSheet()
     }
 
     override fun searchDanmuUi(longClick: Boolean) {

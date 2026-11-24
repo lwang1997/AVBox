@@ -74,6 +74,7 @@
 
     <string name="danmu_settings">彈幕設定</string>
     <string name="danmu_online">線上彈幕</string>
+    <string name="danmu_auto_search">自動搜尋</string>
     <string name="danmu_color">彈幕顏色</string>
     <string name="danmu_color_random">隨機</string>
     <string name="danmu_speed">彈幕速度</string>
@@ -151,6 +152,7 @@
     <string name="player_menu_video_track">視訊軌</string>
     <string name="player_menu_danmu">彈幕</string>
     <string name="player_menu_search_danmu">搜彈幕</string>
+    <string name="player_menu_line_danmu">線路彈幕</string>
     <string name="player_menu_params">播放參數</string>
     <string name="player_menu_more">更多</string>
     <string name="player_menu_parse">解析</string>
@@ -532,12 +534,20 @@
     <string name="log_level_debug">Debug</string>
     <string name="log_level_error">Error</string>
     <string name="log_level_none">None</string>
+    <string name="log_file_save">儲存日誌到檔案</string>
+    <string name="log_file_path">儲存位置：%1$s</string>
+    <string name="log_clear">清空日誌</string>
+    <string name="log_cleared">日誌已清空</string>
     <string name="settings_detail_play">詳情頁播放</string>
     <string name="settings_detail_play_fullscreen">直接全螢幕</string>
     <string name="settings_detail_play_inline">留在小窗</string>
     <string name="player_fullscreen">全螢幕</string>
     <string name="settings_danmu_switch">彈幕開關</string>
+    <string name="settings_danmu_auto_search">自動搜尋彈幕</string>
+    <string name="settings_danmu_auto_search_desc">關閉後不主動搜尋彈幕，僅使用線路自帶的彈幕</string>
     <string name="settings_danmu_api">彈幕 API</string>
+    <string name="settings_danmu_api_desc">為空時跟隨線路自帶的彈幕介面</string>
+    <string name="settings_danmu_api_line">線路自帶</string>
     <string name="settings_long_press_speed">長按倍速</string>
     <string name="settings_buffer_time">緩衝時間</string>
     <string name="settings_search_threads">搜尋執行緒</string>

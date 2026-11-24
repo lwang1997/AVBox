@@ -1,9 +1,11 @@
 package com.github.avbox.osc.util
 
+import android.os.Environment
 import android.util.Log
 
 import com.github.avbox.osc.BuildConfig
 
+import java.io.BufferedWriter
 import java.io.File
 import java.io.FileWriter
 import java.text.SimpleDateFormat
@@ -40,6 +42,7 @@ object AppLog {
             if (ring.size >= RING_MAX) ring.removeFirst()
             ring.addLast(line)
         }
+        writeUserFile(line)
     }
 
     @JvmStatic
@@ -54,6 +57,161 @@ object AppLog {
                 .append(line.level).append(' ').append(line.text).append('\n')
         }
         return sb.toString()
+    }
+
+    // ------------------------------------------------------------------
+    // 用户可见的日志文件：默认保存到存储根目录 AVBox/log/avbox.log（文件管理器直达），
+    // 没有"所有文件访问"权限时退回应用外部目录。日志页可开关、可清空。
+    // ------------------------------------------------------------------
+    private const val USER_LOG_DIR = "AVBox/log"
+    private const val USER_LOG_NAME = "avbox.log"
+    private const val USER_LOG_BACKUP = "avbox.old.log"
+    internal const val USER_LOG_MAX_BYTES = 4L * 1024 * 1024
+
+    @Volatile
+    private var userFileEnabled: Boolean? = null
+
+    @Volatile
+    private var userFileFlushAt: Long = 0L
+
+    private val userFileExecutor: ExecutorService =
+        Executors.newSingleThreadExecutor { runnable ->
+            Thread(runnable, "applog-file").apply { isDaemon = true }
+        }
+
+    private var userFileWriter: BufferedWriter? = null
+    private var userFileTarget: File? = null
+    private val userLineFormat = SimpleDateFormat("MM-dd HH:mm:ss.SSS", Locale.US)
+    private val userHeaderFormat = SimpleDateFormat("yyyy-MM-dd HH:mm:ss", Locale.US)
+
+    @JvmStatic
+    fun isFileLogEnabled(): Boolean {
+        val cached = userFileEnabled
+        if (cached != null) return cached
+        val value = try {
+            KV.get(KVKeys.LOG_TO_FILE, true)
+        } catch (th: Throwable) {
+            true
+        }
+        userFileEnabled = value
+        return value
+    }
+
+    @JvmStatic
+    fun setFileLogEnabled(enabled: Boolean) {
+        userFileEnabled = enabled
+        try {
+            KV.put(KVKeys.LOG_TO_FILE, enabled)
+        } catch (ignored: Throwable) {
+        }
+        executeFileTask {
+            if (enabled) ensureUserFile() else closeUserFile()
+        }
+    }
+
+    /** 当前日志文件路径；没有任何可写目录时返回空串。 */
+    @JvmStatic
+    fun fileLogPath(): String {
+        val dir = resolveUserLogDir() ?: return ""
+        return File(dir, USER_LOG_NAME).absolutePath
+    }
+
+    /** 清空应用内日志与已保存的日志文件。 */
+    @JvmStatic
+    fun clearAll() {
+        synchronized(ring) { ring.clear() }
+        executeFileTask {
+            closeUserFile()
+            val dir = resolveUserLogDir() ?: return@executeFileTask
+            File(dir, USER_LOG_NAME).delete()
+            File(dir, USER_LOG_BACKUP).delete()
+        }
+    }
+
+    internal fun shouldRotateUserLog(sizeBytes: Long): Boolean = sizeBytes >= USER_LOG_MAX_BYTES
+
+    private fun executeFileTask(task: () -> Unit) {
+        try {
+            userFileExecutor.execute { try { task() } catch (ignored: Throwable) {} }
+        } catch (ignored: Throwable) {
+        }
+    }
+
+    private fun writeUserFile(line: LogLine) {
+        if (!isFileLogEnabled()) return
+        executeFileTask {
+            val writer = ensureUserFile() ?: return@executeFileTask
+            writer.write(userLineFormat.format(Date(line.time)))
+            writer.write(" ")
+            writer.write(line.level.toString())
+            writer.write(" ")
+            writer.write(line.text)
+            writer.newLine()
+            val now = System.currentTimeMillis()
+            if (line.level == 'E' || now - userFileFlushAt >= 1000L) {
+                writer.flush()
+                userFileFlushAt = now
+            }
+        }
+    }
+
+    private fun ensureUserFile(): BufferedWriter? {
+        val dir = resolveUserLogDir() ?: return null
+        val file = File(dir, USER_LOG_NAME)
+        val current = userFileWriter
+        if (current != null && userFileTarget?.absolutePath == file.absolutePath) return current
+        closeUserFile()
+        return try {
+            if (file.exists() && shouldRotateUserLog(file.length())) {
+                val backup = File(dir, USER_LOG_BACKUP)
+                backup.delete()
+                file.renameTo(backup)
+            }
+            val writer = BufferedWriter(FileWriter(file, true))
+            writer.write("==== " + userHeaderFormat.format(Date()) + " ====\n")
+            writer.flush()
+            userFileWriter = writer
+            userFileTarget = file
+            writer
+        } catch (ignored: Throwable) {
+            null
+        }
+    }
+
+    private fun closeUserFile() {
+        try {
+            userFileWriter?.flush()
+        } catch (ignored: Throwable) {
+        }
+        try {
+            userFileWriter?.close()
+        } catch (ignored: Throwable) {
+        }
+        userFileWriter = null
+        userFileTarget = null
+        userFileFlushAt = 0L
+    }
+
+    private fun resolveUserLogDir(): File? {
+        val context = try {
+            AppContextHolder.context()
+        } catch (th: Throwable) {
+            null
+        }
+        try {
+            val dir = File(Environment.getExternalStorageDirectory(), USER_LOG_DIR)
+            if (!dir.exists()) dir.mkdirs()
+            if (dir.isDirectory && dir.canWrite()) return dir
+        } catch (ignored: Throwable) {
+        }
+        if (context == null) return null
+        try {
+            val dir = File(context.getExternalFilesDir(null), "log")
+            if (!dir.exists()) dir.mkdirs()
+            if (dir.isDirectory && dir.canWrite()) return dir
+        } catch (ignored: Throwable) {
+        }
+        return null
     }
 
 

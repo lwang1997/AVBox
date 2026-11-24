@@ -540,6 +540,7 @@ class ParamsSheetState(
     val onSetTimeEnd: () -> Unit,
     val onResetTime: () -> Unit,
     val onSearchDanmu: (() -> Unit)?,
+    val onSearchDanmuBuiltin: (() -> Unit)? = null,
 )
 
 class PictureParamsState(
@@ -567,6 +568,7 @@ class DanmuSettingSheetState(
     val onOpenSearch: () -> Unit,
     val onReset: () -> Unit = {},
     val onSettingsApplied: (Boolean) -> Unit = {},
+    val onAutoSearchEnabled: () -> Unit = {},
 )
 
 class DanmuSearchSheetState(

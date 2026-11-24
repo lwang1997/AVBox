@@ -25,6 +25,7 @@ object SyncSettingsWhitelist {
         KVKeys.SUBTITLE_EXO_POSITION,
         // 弹幕
         KVKeys.DANMU_OPEN,
+        KVKeys.DANMU_AUTO_SEARCH,
         KVKeys.DANMU_MAX_LINE,
         KVKeys.DANMU_SPEED,
         KVKeys.DANMU_ALPHA,

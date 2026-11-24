@@ -10,6 +10,7 @@ import com.github.avbox.osc.player.engine.MediaSources
 import com.github.avbox.osc.player.engine.SourcePolicy
 import com.github.avbox.osc.sourcedata.SourceViewModel
 import com.github.avbox.osc.util.AppLog
+import com.github.avbox.osc.util.DanmuSettingsState
 import java.nio.charset.StandardCharsets
 import java.util.Locale
 import kotlinx.coroutines.CoroutineScope
@@ -151,11 +152,13 @@ class PlaybackFetch(private val controller: PlaybackController) {
                     if (view != null) controller.playUrl(playUrl + url, headers)
                 }
                 if (TextUtils.isEmpty(danmaku)) {
+                    AppLog.i("echo-danmu play result without danmaku")
                     checkDanmu("", null)
                     searchDanmu("")
                 } else {
                     checkDanmu(danmaku) {
                         if (TextUtils.equals(danmuProgressKey, controller.progressKey())) {
+                            AppLog.i("echo-danmu line danmaku failed, try fallback search")
                             searchDanmu("")
                         }
                     }
@@ -199,8 +202,17 @@ class PlaybackFetch(private val controller: PlaybackController) {
         return value.contains("lyric") || value.contains("lrc") || name.contains("歌词") // i18n: keep
     }
 
-    private fun searchDanmu(danmaku: String) {
-        if (!TextUtils.isEmpty(danmaku) || !DanmakuApi.canSearch(controller.sourceBean())) return
+    fun searchDanmuForCurrentEpisode() {
+        searchDanmu("", true)
+    }
+
+    private fun searchDanmu(danmaku: String, force: Boolean = false) {
+        if (!TextUtils.isEmpty(danmaku)) return
+        if (!force && !DanmuSettingsState.autoSearch) {
+            AppLog.i("echo-danmu auto search disabled by setting")
+            return
+        }
+        if (!DanmakuApi.canSearch(controller.sourceBean())) return
         val vod = controller.vod() ?: return
         val series = controller.currentSeries(vod.playFlag, vod.playIndex)
         val key = controller.progressKey()
@@ -208,6 +220,7 @@ class PlaybackFetch(private val controller: PlaybackController) {
         danmuJob = scope.launch {
             val url = DanmakuApi.search(vod.name, if (series == null) "" else series.name)
             if (!TextUtils.equals(key, controller.progressKey())) return@launch
+            AppLog.i("echo-danmu fallback search: " + if (TextUtils.isEmpty(url)) "empty" else "hit")
             checkDanmu(url ?: "", null)
         }
     }

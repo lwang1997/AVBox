@@ -22,6 +22,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.github.avbox.osc.R
+import com.github.avbox.osc.api.DanmakuApi
 import com.github.avbox.osc.player.state.PlaybackSettingsState
 import com.github.avbox.osc.ui.components.AVBoxAlertDialog
 import com.github.avbox.osc.ui.components.AppTopBarScaffold
@@ -51,6 +52,12 @@ fun PreferenceSettingsScreen(onNavigateBack: () -> Unit) {
     val playbackConfig = PlaybackSettingsState.config
     val danmuConfig = DanmuSettingsState.config
     val searchConfig = SearchSettingsState.config
+    val danmuLineApi = DanmakuApi.lineApiUrl()
+    val danmuApiStatusRes = when {
+        danmuConfig.api.isNotBlank() -> R.string.common_set
+        danmuLineApi.isNotEmpty() -> R.string.settings_danmu_api_line
+        else -> R.string.common_not_set
+    }
     var sliderSpeed by remember(uiConfig.longPressSpeed) { mutableStateOf(uiConfig.longPressSpeed) }
     var sliderBuffer by remember(playbackConfig.bufferTimes) { mutableStateOf(playbackConfig.bufferTimes) }
     var sliderThreads by remember(searchConfig.searchThreads) { mutableStateOf(searchConfig.searchThreads) }
@@ -193,10 +200,20 @@ fun PreferenceSettingsScreen(onNavigateBack: () -> Unit) {
                     )
                 }
                 SettingsCard(SettingsCardPosition.MIDDLE) {
+                    SettingsSwitchRow(
+                        title = stringResource(R.string.settings_danmu_auto_search),
+                        subtitle = stringResource(R.string.settings_danmu_auto_search_desc),
+                        leadingIconRes = R.drawable.ic_pref_danmu,
+                        checked = danmuConfig.autoSearch,
+                        onCheckedChange = { DanmuSettingsState.autoSearch = it },
+                    )
+                }
+                SettingsCard(SettingsCardPosition.MIDDLE) {
                     SettingsRow(
                         title = stringResource(R.string.settings_danmu_api),
+                        subtitle = stringResource(R.string.settings_danmu_api_desc),
                         leadingIconRes = R.drawable.ic_pref_danmu_api,
-                        valueText = stringResource(if (danmuConfig.api.isEmpty()) R.string.common_not_set else R.string.common_set),
+                        valueText = stringResource(danmuApiStatusRes),
                         onClick = { danmuApiDialog = true },
                     )
                 }
@@ -255,12 +272,15 @@ fun PreferenceSettingsScreen(onNavigateBack: () -> Unit) {
     }
 
     if (danmuApiDialog) {
+        // 为空时跟随线路接口：预填当前生效地址供查看/编辑，未改动则保持"跟随线路"
+        val followLine = danmuConfig.api.isBlank()
+        val initialApi = if (followLine) danmuLineApi else danmuConfig.api
         TextEditDialog(
             title = stringResource(R.string.settings_danmu_api),
-            initialText = danmuConfig.api,
+            initialText = initialApi,
             onDismiss = { danmuApiDialog = false },
             onConfirm = { text ->
-                DanmuSettingsState.api = text
+                DanmuSettingsState.api = if (followLine && text == initialApi) "" else text
                 danmuApiDialog = false
             },
         )

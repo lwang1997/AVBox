@@ -54,6 +54,7 @@ object KVKeys {
     const val LIVE_API_URL = "live_api_url"
     const val M3U8_PURIFY = "m3u8_purify"
     const val LOG_LEVEL = "log_level"
+    const val LOG_TO_FILE = "log_to_file"
     const val DETAIL_PLAY_FULLSCREEN = "detail_play_fullscreen"
     const val AUTO_SWITCH_LINE = "auto_switch_line"
     const val AUTO_SWITCH_LINE_DEFAULT = true
@@ -88,6 +89,7 @@ object KVKeys {
     const val EXO_CACHE_SIZE_MB = "exo_cache_size_mb"
     const val EXO_CACHE_SIZE_MB_DEFAULT = 512
     const val DANMU_OPEN = "danmu_open"
+    const val DANMU_AUTO_SEARCH = "danmu_auto_search"
     const val DANMU_MAX_LINE = "danmu_max_line"
     const val DANMU_SPEED = "danmu_speed"
     const val DANMU_ALPHA = "danmu_alpha"
