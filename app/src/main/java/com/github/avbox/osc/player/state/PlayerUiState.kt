@@ -547,7 +547,6 @@ class ParamsSheetState(
     val onSetTimeEnd: () -> Unit,
     val onResetTime: () -> Unit,
     val onSearchDanmu: (() -> Unit)?,
-    val onSearchDanmuBuiltin: (() -> Unit)? = null,
     val onPictureInPicture: (() -> Unit)? = null,
 )
 

@@ -41,8 +41,6 @@ interface VodControlListener {
 
     fun searchDanmuUi(longClick: Boolean)
 
-    fun searchDanmuBuiltin()
-
     fun startPlayUrl(url: String, headers: HashMap<String, String>?)
 
     fun onM3u8ProxyUrl(proxyUrl: String, sourceUrl: String)

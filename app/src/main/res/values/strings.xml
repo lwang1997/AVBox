@@ -87,6 +87,8 @@
     <string name="danmu_lines">弹幕行数</string>
     <string name="danmu_lines_value">%1$d 行</string>
     <string name="danmu_alpha">弹幕透明</string>
+    <string name="danmu_time_offset">时间轴</string>
+    <string name="danmu_time_offset_value">%1$s 秒</string>
     <string name="danmu_search_hint">请输入弹幕名称</string>
     <string name="toast_input_empty">输入内容不能为空</string>
     <string name="toast_danmu_not_found">未查询到匹配弹幕</string>
@@ -151,7 +153,6 @@
     <string name="player_menu_audio_track">音轨</string>
     <string name="player_menu_video_track">视轨</string>
     <string name="player_menu_danmu">弹幕</string>
-    <string name="player_menu_search_danmu">搜弹幕</string>
     <string name="player_menu_line_danmu">线路弹幕</string>
     <string name="player_menu_params">播放参数</string>
     <string name="player_menu_more">更多</string>

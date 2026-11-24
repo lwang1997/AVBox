@@ -58,6 +58,7 @@ class DanmuLoadController(
     private var pendingPrepare: Boolean = false
     private var temporarilyClosed: Boolean = false
     private var placeholderRetryCount: Int = 0
+    private var appliedOffsetMs: Long = 0L
 
     private var overlayHidden: Boolean = false
     private var loadCallback: LoadCallback? = null
@@ -78,6 +79,9 @@ class DanmuLoadController(
     fun applySettings(reload: Boolean) {
         if (danmuView == null) return
         val config = DanmuSettingsState.config
+        val offsetMs = config.timeOffsetSeconds * 1000L
+        val offsetChanged = offsetMs != appliedOffsetMs
+        appliedOffsetMs = offsetMs
         if (!config.open) {
             releaseView()
             controller?.setHasDanmu(!TextUtils.isEmpty(danmuText))
@@ -99,6 +103,19 @@ class DanmuLoadController(
         if (reload && !TextUtils.isEmpty(danmuText) && config.open) {
             prepare(danmuText)
         }
+        if (offsetChanged) reloadForTimeOffset()
+    }
+
+    /**
+     * 时间轴偏移改的是弹幕时间（解析时整体平移），所以变化后按当前偏移重新解析一次；
+     * 不影响视频进度；暂停时也可以改，恢复播放时会按新的时间轴启动。
+     */
+    private fun reloadForTimeOffset() {
+        if (TextUtils.isEmpty(danmuText)) return
+        if (!DanmuSettingsState.config.open) return
+        if (danmuView == null || videoView == null) return
+        AppLog.i("echo-danmu time-offset reload: " + appliedOffsetMs + "ms")
+        prepare(danmuText)
     }
 
     fun check(danmu: String?) {
@@ -231,7 +248,7 @@ class DanmuLoadController(
             executor = worker
         }
         worker.execute {
-            val parser = DanmakuXmlParser(danmu) { seq != loadSeq.get() }
+            val parser = DanmakuXmlParser(danmu, { seq != loadSeq.get() }, appliedOffsetMs)
             if (seq != loadSeq.get()) return@execute
             val danmuCount = parser.getDanmuCount()
             AppLog.i("echo-danmu parsed count: $danmuCount")
