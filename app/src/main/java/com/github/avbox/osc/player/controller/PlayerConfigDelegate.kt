@@ -2,7 +2,6 @@ package com.github.avbox.osc.player.controller
 
 import android.os.SystemClock
 import com.github.avbox.osc.R
-import com.github.avbox.osc.api.DanmakuApi
 import com.github.avbox.osc.player.core.DecodeDecision
 import com.github.avbox.osc.player.core.VideoCodecInfo
 import com.github.avbox.osc.player.effect.PictureEffects
@@ -143,11 +142,6 @@ internal class PlayerConfigDelegate(private val host: VideoPlayerController) {
             onResetTime = { host.actions.onTimeResetClicked() },
             onSearchDanmu = if (host.state.danmuSearchAvailable) {
                 { host.actions.onDanmuSearchClicked() }
-            } else {
-                null
-            },
-            onSearchDanmuBuiltin = if (DanmakuApi.canOpenSearch()) {
-                { host.listener?.searchDanmuBuiltin() }
             } else {
                 null
             },

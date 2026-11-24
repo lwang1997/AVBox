@@ -42,11 +42,6 @@ class PlayContainerControlListener(private val container: PlayContainer) : VodCo
         container.pageHostRef?.showEpisodeSheet()
     }
 
-    override fun searchDanmuBuiltin() {
-        if (!container.isAttached()) return
-        container.openDanmuSearchSheet()
-    }
-
     override fun searchDanmuUi(longClick: Boolean) {
         val vod = container.scheduler.vod()
         val series = if (vod == null) {

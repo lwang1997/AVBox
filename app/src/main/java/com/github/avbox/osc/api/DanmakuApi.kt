@@ -98,11 +98,6 @@ class DanmakuApi {
             return lineApiUrl()
         }
 
-        @JvmStatic
-        fun canOpenSearch(): Boolean {
-            return DanmuSettingsState.config.open && !TextUtils.isEmpty(getApiUrl())
-        }
-
         /** 单个接口地址的来源标签（仅用于诊断日志）。 */
         private fun apiLabel(url: String): String = when {
             url == BUILTIN_API -> "builtin"

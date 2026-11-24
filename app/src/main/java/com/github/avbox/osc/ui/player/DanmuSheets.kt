@@ -3,6 +3,8 @@ package com.github.avbox.osc.ui.player
 import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.height
@@ -21,10 +23,14 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Slider
+import androidx.compose.material3.Text
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.github.avbox.osc.R
 import com.github.avbox.osc.api.DanmakuApi
@@ -32,15 +38,19 @@ import com.github.avbox.osc.bean.DanmuSearchResult
 import com.github.avbox.osc.player.state.DanmuSearchSheetState
 import com.github.avbox.osc.player.state.DanmuSettingSheetState
 import com.github.avbox.osc.util.DanmuSettingsState
+import kotlin.math.roundToInt
 import kotlinx.coroutines.launch
 
 private val DANMU_SPEEDS = listOf(2.4f, 1.8f, 1.5f, 1.0f)
+
+/** 弹幕时间轴上限（秒）。 */
+private const val DANMU_TIME_OFFSET_MAX = 300
 
 @Composable
 fun DanmuSettingSheet(sheet: DanmuSettingSheetState, onDismiss: () -> Unit) {
     PlayerDialog(onDismiss = onDismiss) {
         val dismissThen = LocalPlayerSheetDismissThen.current
-        SheetPanel(width = playerDim(R.dimen.vs_520)) {
+        SheetPanel(width = playerDim(R.dimen.vs_520), scrollable = true) {
             var colorIdx by remember { mutableIntStateOf(if (DanmuSettingsState.config.randomColor) 1 else 0) }
             var speedIdx by remember {
                 mutableIntStateOf(DANMU_SPEEDS.indexOf(DanmuSettingsState.config.speed).coerceAtLeast(0))
@@ -51,6 +61,7 @@ fun DanmuSettingSheet(sheet: DanmuSettingSheetState, onDismiss: () -> Unit) {
             var autoSearchIdx by remember {
                 mutableIntStateOf(if (DanmuSettingsState.config.autoSearch) 0 else 1)
             }
+            var timeOffset by remember { mutableIntStateOf(DanmuSettingsState.config.timeOffsetSeconds) }
             Spacer(Modifier.height(playerDim(R.dimen.vs_24)))
             SheetHeaderRow(title = stringResource(R.string.danmu_settings)) {
                 SheetTextAction(
@@ -65,12 +76,17 @@ fun DanmuSettingSheet(sheet: DanmuSettingSheetState, onDismiss: () -> Unit) {
                         line = DanmuSettingsState.config.maxLine
                         alpha = Math.round(DanmuSettingsState.config.alpha * 100)
                         autoSearchIdx = if (DanmuSettingsState.config.autoSearch) 0 else 1
+                        timeOffset = DanmuSettingsState.config.timeOffsetSeconds
                     },
                 )
             }
             Spacer(Modifier.height(playerDim(R.dimen.vs_12)))
             val postSettings: (Boolean) -> Unit = { forColor ->
                 sheet.onSettingsApplied(forColor)
+            }
+            val applyTimeOffset: () -> Unit = {
+                DanmuSettingsState.timeOffsetSeconds = timeOffset
+                postSettings(false)
             }
 
             SheetLabelRow(stringResource(R.string.danmu_online)) {
@@ -182,7 +198,60 @@ fun DanmuSettingSheet(sheet: DanmuSettingSheetState, onDismiss: () -> Unit) {
                         },
                     )
                 }
-                Spacer(Modifier.height(playerDim(R.dimen.vs_24)))
+                Column(
+                    Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = playerDim(R.dimen.vs_30), vertical = playerDim(R.dimen.vs_5)),
+                ) {
+                    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = stringResource(R.string.danmu_time_offset),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontSize = playerTextSize(R.dimen.ts_20),
+                            fontWeight = FontWeight.Medium,
+                        )
+                        Spacer(Modifier.weight(1f))
+                        Text(
+                            text = stringResource(
+                                R.string.danmu_time_offset_value,
+                                if (timeOffset > 0) "+$timeOffset" else "$timeOffset",
+                            ),
+                            color = MaterialTheme.colorScheme.onSurface,
+                            fontSize = playerTextSize(R.dimen.ts_20),
+                            fontWeight = FontWeight.Medium,
+                        )
+                        Spacer(Modifier.width(playerDim(R.dimen.vs_10)))
+                        SheetButton(
+                            text = "-1",
+                            onClick = {
+                                if (timeOffset > -DANMU_TIME_OFFSET_MAX) {
+                                    timeOffset--
+                                    applyTimeOffset()
+                                }
+                            },
+                            modifier = Modifier.size(playerDim(R.dimen.vs_50)),
+                        )
+                        Spacer(Modifier.width(playerDim(R.dimen.vs_10)))
+                        SheetButton(
+                            text = "+1",
+                            onClick = {
+                                if (timeOffset < DANMU_TIME_OFFSET_MAX) {
+                                    timeOffset++
+                                    applyTimeOffset()
+                                }
+                            },
+                            modifier = Modifier.size(playerDim(R.dimen.vs_50)),
+                        )
+                    }
+                    Slider(
+                        value = timeOffset.toFloat(),
+                        onValueChange = { timeOffset = it.roundToInt() },
+                        onValueChangeFinished = { applyTimeOffset() },
+                        valueRange = -DANMU_TIME_OFFSET_MAX.toFloat()..DANMU_TIME_OFFSET_MAX.toFloat(),
+                        modifier = Modifier.fillMaxWidth(),
+                    )
+                }
+                Spacer(Modifier.height(playerDim(R.dimen.vs_12)))
         }
     }
 }

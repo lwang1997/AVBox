@@ -96,6 +96,7 @@ class KVKeySpec : KVDecoder.TypeRegistry {
             register(KVKeys.LIQUID_GLASS_BLUR, 0)
             register(KVKeys.LIQUID_GLASS_DISTORTION, 0)
             register(KVKeys.COLLECT_COLUMNS, 0)
+            register(KVKeys.DANMU_TIME_OFFSET, 0)
 
             register(KVKeys.PLAYER_IS_LIVE, false)
             register(KVKeys.LIVE_CHANNEL_REVERSE, false)

@@ -87,6 +87,8 @@
     <string name="danmu_lines">Danmaku Lines</string>
     <string name="danmu_lines_value">%1$d lines</string>
     <string name="danmu_alpha">Danmaku Opacity</string>
+    <string name="danmu_time_offset">Timing</string>
+    <string name="danmu_time_offset_value">%1$s s</string>
     <string name="danmu_search_hint">Enter danmaku name</string>
     <string name="toast_input_empty">Input cannot be empty</string>
     <string name="toast_danmu_not_found">No matching danmaku found</string>
@@ -151,7 +153,6 @@
     <string name="player_menu_audio_track">Audio</string>
     <string name="player_menu_video_track">Video</string>
     <string name="player_menu_danmu">Danmaku</string>
-    <string name="player_menu_search_danmu">Search Danmaku</string>
     <string name="player_menu_line_danmu">Line Danmaku</string>
     <string name="player_menu_params">Playback settings</string>
     <string name="player_menu_more">More</string>

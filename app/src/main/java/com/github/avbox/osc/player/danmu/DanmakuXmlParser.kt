@@ -47,13 +47,16 @@ class DanmakuXmlParser : BaseDanmakuParser {
 
     private val danmu: Danmu
     private val cancelChecker: CancelChecker?
+    /** 弹幕时间整体平移（毫秒）：正数 = 延后，负数 = 提前。 */
+    private val timeOffsetMs: Long
     private var scaleX: Float = 0f
     private var scaleY: Float = 0f
     private var index: Int = 0
 
     @JvmOverloads
-    constructor(input: String?, cancelChecker: CancelChecker? = null) {
+    constructor(input: String?, cancelChecker: CancelChecker? = null, timeOffsetMs: Long = 0L) {
         this.cancelChecker = cancelChecker
+        this.timeOffsetMs = timeOffsetMs
         this.danmu = Danmu.fromXml(resolveContent(input))
     }
 
@@ -236,7 +239,7 @@ class DanmakuXmlParser : BaseDanmakuParser {
             val type = values[1].toInt()
             val item = mContext.mDanmakuFactory.createDanmaku(type, mContext)
             if (item == null) return null
-            val time = (values[0].toFloat() * 1000).toLong()
+            val time = ((values[0].toFloat() * 1000).toLong() + timeOffsetMs).coerceAtLeast(0L)
             val size = values[2].toFloat() * Math.max(1.0f, mDispDensity - 0.6f)
             val color = if (DanmuSettingsState.config.randomColor) {
                 DanmuSettingsState.randomColor()

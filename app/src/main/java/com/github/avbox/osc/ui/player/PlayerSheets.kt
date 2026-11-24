@@ -15,6 +15,7 @@ import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
@@ -23,11 +24,14 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.text.BasicTextField
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
@@ -176,6 +180,7 @@ private val FocusStroke = 2.dp
 internal fun SheetPanel(
     width: Dp,
     modifier: Modifier = Modifier,
+    scrollable: Boolean = false,
     content: @Composable ColumnScope.() -> Unit,
 ) {
     Surface(
@@ -184,7 +189,19 @@ internal fun SheetPanel(
         color = MaterialTheme.colorScheme.surfaceContainer,
         shadowElevation = 6.dp,
     ) {
-        Column(content = content)
+        if (scrollable) {
+            // 内容多时限制高度并滚动，避免横屏下被屏幕裁掉
+            BoxWithConstraints(Modifier.fillMaxWidth()) {
+                Column(
+                    modifier = Modifier
+                        .heightIn(max = maxHeight * 0.92f)
+                        .verticalScroll(rememberScrollState()),
+                    content = content,
+                )
+            }
+        } else {
+            Column(content = content)
+        }
     }
 }
 
