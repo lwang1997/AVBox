@@ -88,11 +88,27 @@ internal object Anime4kShader {
 
     private const val ENTRY = "void main() {\n  gl_FragColor = hook();\n}\n"
 
-    private const val PRESENT_BOX_BODY = "vec4 hook() {\n" +
-        "    return (MAIN_tex(MAIN_pos + vec2(-0.5, -0.5) * MAIN_pt)\n" +
-        "        + MAIN_tex(MAIN_pos + vec2(0.5, -0.5) * MAIN_pt)\n" +
-        "        + MAIN_tex(MAIN_pos + vec2(-0.5, 0.5) * MAIN_pt)\n" +
-        "        + MAIN_tex(MAIN_pos + vec2(0.5, 0.5) * MAIN_pt)) * 0.25;\n" +
+    // 超分后缩回目标尺寸走 box 分支；它也必须带 uSharpen，否则默认 Standard 档
+    // （2x → 原生尺寸）里锐化滑条同样空转。邻居用 2 个源 texel 偏移 = 1 个目标像素。
+    private const val PRESENT_BOX_BODY = "uniform float uSharpen;\n" +
+        "const vec3 LUMA = vec3(0.2126, 0.7152, 0.0722);\n" +
+        "vec4 box4(vec2 p) {\n" +
+        "    return (MAIN_tex(p + vec2(-0.5, -0.5) * MAIN_pt)\n" +
+        "        + MAIN_tex(p + vec2(0.5, -0.5) * MAIN_pt)\n" +
+        "        + MAIN_tex(p + vec2(-0.5, 0.5) * MAIN_pt)\n" +
+        "        + MAIN_tex(p + vec2(0.5, 0.5) * MAIN_pt)) * 0.25;\n" +
+        "}\n" +
+        "vec4 hook() {\n" +
+        "    vec4 c = box4(MAIN_pos);\n" +
+        "    float lc = dot(c.rgb, LUMA);\n" +
+        "    float ln = dot(MAIN_tex(MAIN_pos + vec2(0.0, -2.0) * MAIN_pt).rgb, LUMA);\n" +
+        "    float ls = dot(MAIN_tex(MAIN_pos + vec2(0.0, 2.0) * MAIN_pt).rgb, LUMA);\n" +
+        "    float lw = dot(MAIN_tex(MAIN_pos + vec2(-2.0, 0.0) * MAIN_pt).rgb, LUMA);\n" +
+        "    float le = dot(MAIN_tex(MAIN_pos + vec2(2.0, 0.0) * MAIN_pt).rgb, LUMA);\n" +
+        "    float delta = (lc - (ln + ls + lw + le) * 0.25) * uSharpen;\n" +
+        "    float up = max(0.0, max(max(ln, ls), max(lw, le)) - lc);\n" +
+        "    float down = max(0.0, lc - min(min(ln, ls), min(lw, le)));\n" +
+        "    return vec4(clamp(c.rgb + clamp(delta, -down, up), 0.0, 1.0), c.a);\n" +
         "}\n"
 
     private const val PRESENT_SHARP_BODY = "uniform float uSharpen;\n" +
@@ -117,8 +133,6 @@ internal object Anime4kShader {
 
     fun parse(text: String): List<Anime4kPass> = splitBlocks(text).map(::buildPass)
 
-    private const val UPSCALE_MIN_RATIO = 1.35f
-
     private const val DOUBLE_UPSCALE_MIN_RATIO = 2.5f
 
     internal data class Composed(val passes: List<Anime4kPass>, val upscaleCount: Int)
@@ -132,15 +146,15 @@ internal object Anime4kShader {
         canvas: IntArray?,
         deblurEnabled: Boolean,
     ): Composed {
+        // EffectCanvas 推的是视频原生尺寸，canvas/input 恒为 1，旧的 ratio<1.35 判据会让
+        // 带 upscale 的档位永远跳过超分。改为：有放大资产就至少跑一次 2x，再在 present
+        // 段缩回目标尺寸（等价于超采样抗锯齿 + 细节增强）；只有超大画布才跑两次。
         val ratio = canvas?.let { it[0].toFloat() / inputWidth } ?: 1f
-        var count = when {
+        val count = when {
             upscale.isEmpty() -> 0
-            canvas == null -> 1
-            ratio < UPSCALE_MIN_RATIO -> 0
             ratio >= DOUBLE_UPSCALE_MIN_RATIO -> 2
             else -> 1
         }
-        if (count == 0 && restore.isEmpty() && !deblurEnabled && upscale.isNotEmpty()) count = 1
         val passes = ArrayList<Anime4kPass>()
         passes.addAll(clamp.dropLast(1))
         passes.addAll(restore)
@@ -181,8 +195,10 @@ internal object Anime4kShader {
         }
         val result = ArrayList(planned)
         val last = result.lastOrNull()
-        val target = presentedSize(inputWidth, inputHeight, last, canvas)
-        if (last != null && (last.width != target[0] || last.height != target[1])) {
+        // 始终追加 present：1:1 链（Light/真人电影档没有 upscale）原先尺寸相等就不建
+        // present，导致 uSharpen 无人绑定、锐化滑条空转。present 同时兼作锐化落点。
+        if (last != null) {
+            val target = presentedSize(inputWidth, inputHeight, last, canvas)
             result.add(
                 Anime4kPlannedPass(
                     pass = presentPass(

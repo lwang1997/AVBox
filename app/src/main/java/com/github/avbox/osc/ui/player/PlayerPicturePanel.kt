@@ -26,6 +26,7 @@ import com.github.avbox.osc.player.effect.PictureEffectUnavailableReason
 import com.github.avbox.osc.player.effect.PicturePreset
 import com.github.avbox.osc.player.effect.PictureProfile
 import com.github.avbox.osc.player.effect.anime4k.Anime4kMode
+import com.github.avbox.osc.player.effect.anime4k.Anime4kSettings
 import com.github.avbox.osc.player.state.PictureParamsState
 import java.util.Locale
 
@@ -75,7 +76,8 @@ internal fun PictureParams(state: PictureParamsState) {
                 contentPadding = playerDim(R.dimen.vs_20),
                 modifier = Modifier.weight(1f),
             )
-            if (state.anime4kEnabled) {
+            // 与链共用判据：真人模式忽略去模糊，UI 同步隐藏以免误导与空重启。
+            if (state.anime4kEnabled && Anime4kSettings.deblurApplicable(state.anime4kMode)) {
                 SheetButton(
                     text = stringResource(R.string.player_anime4k_deblur),
                     selected = state.anime4kDeblur,
@@ -105,6 +107,16 @@ internal fun PictureParams(state: PictureParamsState) {
             PictureSlider(R.string.player_anime4k_sharpen, sharpen, 0f..1f, "%.2f") {
                 sharpen = it
                 state.onAnime4kSharpenChanged(it)
+            }
+            if (state.anime4kMode == Anime4kMode.RealMovie) {
+                Text(
+                    text = stringResource(R.string.player_anime4k_sharpen_real_movie_hint),
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    fontSize = playerTextSize(R.dimen.ts_18),
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth(),
+                )
+                Spacer(Modifier.height(playerDim(R.dimen.vs_10)))
             }
         }
         if (state.anime4kUnavailable) {

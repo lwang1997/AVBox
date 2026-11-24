@@ -321,7 +321,7 @@ class Anime4kShaderTest {
     }
 
     @Test
-    fun compose_skips_upscale_when_canvas_is_close_to_source() {
+    fun compose_runs_one_upscale_even_when_canvas_is_close_to_source() {
         val restore = passesOf("Anime4K_Restore_CNN_S.glsl")
         val upscale = passesOf("Anime4K_Upscale_CNN_x2_S.glsl")
         val clamp = passesOf("Anime4K_Clamp_Highlights.glsl")
@@ -332,11 +332,11 @@ class Anime4kShaderTest {
             emptyList(),
             clamp!!,
             1920,
-            intArrayOf(2240, 1260),
+            intArrayOf(1920, 1080),
             false,
         )
-        assertEquals(0, composed.upscaleCount)
-        assertTrue(composed.passes.none { it.name.contains("Depth-to-Space") })
+        assertEquals(1, composed.upscaleCount)
+        assertEquals(1, composed.passes.count { it.name.contains("Depth-to-Space") })
     }
 
     @Test
@@ -464,20 +464,27 @@ class Anime4kShaderTest {
         val restore = asset("Anime4K_Restore_CNN_S.glsl")
         assumeTrue("未找到资产文件,跳过", restore != null)
         val io = Anime4kShader.assignTargets(Anime4kShader.plan(listOf(restore!!.readText()), 1920, 1080))
-        assertEquals(4, io.size)
-        val last = io.last()
-        assertEquals(Anime4kShader.SCREEN_TARGET, last.outputTarget)
-        assertEquals(Anime4kShader.INPUT_BINDING, last.bindings.first { it.name == "MAIN" }.target)
+        assertEquals(5, io.size)
+        val restoreOut = io[3]
+        assertEquals(
+            "Restore 末 pass 仍应从输入纹理取图",
+            Anime4kShader.INPUT_BINDING,
+            restoreOut.bindings.first { it.name == "MAIN" }.target,
+        )
+        val present = io.last()
+        assertEquals(Anime4kShader.SCREEN_TARGET, present.outputTarget)
+        assertEquals("present 应读 Restore 的输出", restoreOut.outputTarget, present.bindings.first { it.name == "MAIN" }.target)
     }
 
     @Test
-    fun plan_keeps_one_to_one_tier_without_present_pass() {
+    fun plan_adds_present_pass_for_one_to_one_tier_to_carry_sharpen() {
         val restore = asset("Anime4K_Restore_CNN_S.glsl")
         assumeTrue("未找到资产文件,跳过", restore != null)
         val planned = Anime4kShader.plan(listOf(restore!!.readText()), 1920, 1080)
-        assertEquals(4, planned.size)
+        assertEquals(5, planned.size)
+        assertEquals("present", planned.last().pass.name)
         assertTrue(planned.last().writesScreen)
-        assertTrue(planned.none { it.pass.name == "present" })
+        assertTrue("1:1 的 present 也要带锐化 uniform", planned.last().pass.fragmentShader.contains("uniform float uSharpen;"))
     }
 
     @Test
@@ -485,7 +492,7 @@ class Anime4kShaderTest {
         val deblur = passesOf("Anime4K_Deblur_DoG.glsl")
         assumeTrue("未找到资产文件,跳过", deblur != null)
         val io = Anime4kShader.assignTargets(Anime4kShader.planPasses(deblur!!, 640, 360, null))
-        assertEquals(4, io.size)
+        assertEquals(5, io.size)
         val apply = io[3]
         assertEquals("MAIN", apply.planned.pass.save)
         val hooked = apply.bindings.first { it.name == Anime4kShader.HOOKED }

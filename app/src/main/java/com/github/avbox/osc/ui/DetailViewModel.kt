@@ -86,6 +86,9 @@ class DetailViewModel : ViewModel(), TmdbPosterCache {
     val vodUi: StateFlow<VodUiSnapshot?> = _vodUi.asStateFlow()
     private val _fullScreen = MutableStateFlow(false)
     val fullScreen = _fullScreen.asStateFlow()
+    /** 无 TMDB 选集的展示样式：true=单列全宽，false=紧凑宫格。持久化到 KV。 */
+    private val _episodeListWide = MutableStateFlow(KV.get(KVKeys.DETAIL_EPISODE_LIST_WIDE, false))
+    val episodeListWide: StateFlow<Boolean> = _episodeListWide.asStateFlow()
     private val _rotating = MutableStateFlow(false)
     val rotating: StateFlow<Boolean> = _rotating.asStateFlow()
     private val _enteringFullscreen = MutableStateFlow(false)
@@ -1028,6 +1031,12 @@ class DetailViewModel : ViewModel(), TmdbPosterCache {
         if (list.size <= 1) return
         info.reverse()
         commitVodInfo(info.copy(reverseSort = !info.reverseSort, playIndex = (list.size - 1) - info.playIndex))
+    }
+
+    fun toggleEpisodeListStyle() {
+        val next = !_episodeListWide.value
+        _episodeListWide.value = next
+        KV.put(KVKeys.DETAIL_EPISODE_LIST_WIDE, next)
     }
 
     fun toggleCollect() {

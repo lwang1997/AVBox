@@ -145,7 +145,6 @@ internal class PlayerConfigDelegate(private val host: VideoPlayerController) {
             } else {
                 null
             },
-            onPictureInPicture = { host.actions.onPictureInPictureClicked() },
         )
     }
 

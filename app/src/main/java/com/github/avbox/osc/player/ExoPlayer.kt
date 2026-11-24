@@ -284,6 +284,10 @@ class ExoPlayer(context: Context) : KernelPlayer(), PictureEffectHost {
         engine?.notifyVideoOutputResolution(width, height)
     }
 
+    fun setEffectCanvasSize(width: Int, height: Int) {
+        engine?.setEffectCanvasSize(width, height)
+    }
+
     override fun redrawVideoFrame() {
         engine?.redrawVideoFrame()
     }

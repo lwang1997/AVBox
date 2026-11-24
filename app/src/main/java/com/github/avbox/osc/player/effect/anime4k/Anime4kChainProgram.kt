@@ -130,7 +130,7 @@ internal class Anime4kChainProgram(
                     if (compiled.writesScreen) {
                         program.setFloatsUniformIfPresent(
                             "uSharpen",
-                            floatArrayOf(Anime4kSettings.sharpen()),
+                            floatArrayOf(Anime4kSettings.effectiveSharpen(effect.mode)),
                         )
                     }
                     program.bindAttributesAndUniforms()
@@ -164,7 +164,7 @@ internal class Anime4kChainProgram(
         val restore = tier.restore(mode)?.let { load(it) }.orEmpty()
         val upscale = tier.upscale(mode)?.let { load(it) }.orEmpty()
         val deblur = load(ANIME4K_DEBLUR_DOG)
-        val deblurOn = Anime4kSettings.deblur()
+        val deblurOn = Anime4kSettings.effectiveDeblur(mode)
         val composed = Anime4kShader.compose(restore, upscale, deblur, clamp, inputWidth, canvas, deblurOn)
         val planned = Anime4kShader.planPasses(composed.passes, inputWidth, inputHeight, canvas)
         if (planned.isEmpty()) throw IllegalStateException("no pass parsed: tier=${tier.name}")
