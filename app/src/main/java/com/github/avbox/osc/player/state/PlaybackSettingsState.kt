@@ -24,6 +24,7 @@ data class PlaybackSettingsConfig(
     val autoSwitchLine: Boolean,
     val m3u8Purify: Boolean,
     val detailPlayFullscreen: Boolean,
+    val pictureInPictureAuto: Boolean,
     val bufferTimes: Int,
     val playCache: Boolean,
     val exoCacheSizeMb: Int,
@@ -55,6 +56,7 @@ object PlaybackSettingsState {
         autoSwitchLine = KV.get(KVKeys.AUTO_SWITCH_LINE, KVKeys.AUTO_SWITCH_LINE_DEFAULT),
         m3u8Purify = KV.get(KVKeys.M3U8_PURIFY, false),
         detailPlayFullscreen = KV.get(KVKeys.DETAIL_PLAY_FULLSCREEN, true),
+        pictureInPictureAuto = KV.get(KVKeys.PICTURE_IN_PICTURE_AUTO, KVKeys.PICTURE_IN_PICTURE_AUTO_DEFAULT),
         bufferTimes = KV.get(KVKeys.BUFFER_TIMES, KVKeys.BUFFER_TIMES_DEFAULT),
         playCache = KV.get(KVKeys.PLAY_CACHE, false),
         exoCacheSizeMb = KV.get(KVKeys.EXO_CACHE_SIZE_MB, KVKeys.EXO_CACHE_SIZE_MB_DEFAULT),
@@ -161,6 +163,13 @@ object PlaybackSettingsState {
         set(value) {
             KV.put(KVKeys.DETAIL_PLAY_FULLSCREEN, value)
             current = current.copy(detailPlayFullscreen = value)
+        }
+
+    var pictureInPictureAuto: Boolean
+        get() = current.pictureInPictureAuto
+        set(value) {
+            KV.put(KVKeys.PICTURE_IN_PICTURE_AUTO, value)
+            current = current.copy(pictureInPictureAuto = value)
         }
 
     var bufferTimes: Int

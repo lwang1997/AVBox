@@ -155,6 +155,8 @@
     <string name="player_menu_line_danmu">Line Danmaku</string>
     <string name="player_menu_params">Playback settings</string>
     <string name="player_menu_more">More</string>
+    <string name="player_picture_in_picture">Picture in picture</string>
+    <string name="toast_pip_unsupported">Picture in picture is not supported on this device</string>
     <string name="player_menu_parse">Parse</string>
 
     <string name="player_params_speed">Speed</string>
@@ -523,6 +525,7 @@
     <string name="settings_nav_animation_disable">Disable Navigation Animation</string>
     <string name="settings_nav_live_hidden">Hide Live in Navigation Bar</string>
     <string name="settings_auto_switch_line">Auto Switch Line</string>
+    <string name="settings_picture_in_picture_auto">Auto picture in picture on background</string>
     <string name="settings_m3u8_purify">M3U8 Purify</string>
     <string name="settings_logs_title">Logs</string>
     <string name="settings_logs_subtitle">View app runtime logs</string>

@@ -60,6 +60,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalConfiguration
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
@@ -89,7 +90,11 @@ import java.util.Date
 import kotlin.math.max
 
 @Composable
-internal fun LiveScreen(state: LivePlayUiState, actions: LivePlayActions) {
+internal fun LiveScreen(
+    state: LivePlayUiState,
+    actions: LivePlayActions,
+    pictureInPicture: Boolean = false,
+) {
     val background = if (state.frame.isFullBox) Color.Black else MaterialTheme.colorScheme.surfaceContainer
     Box(
         modifier = Modifier
@@ -115,7 +120,7 @@ internal fun LiveScreen(state: LivePlayUiState, actions: LivePlayActions) {
                 onRetry = actions.page.onRetryLoad,
             )
 
-            PageState.READY -> LiveReadyContent(state, actions)
+            PageState.READY -> LiveReadyContent(state, actions, pictureInPicture)
         }
         if (state.epg.sheetVisible) {
             EpgSheet(
@@ -184,7 +189,11 @@ private fun LivePasswordDialog(
 }
 
 @Composable
-private fun LiveReadyContent(state: LivePlayUiState, actions: LivePlayActions) {
+private fun LiveReadyContent(
+    state: LivePlayUiState,
+    actions: LivePlayActions,
+    pictureInPicture: Boolean,
+) {
     val configuration = LocalConfiguration.current
     val shortEdge = minOf(configuration.screenWidthDp, configuration.screenHeightDp).dp
     val longEdge = maxOf(configuration.screenWidthDp, configuration.screenHeightDp).dp
@@ -195,6 +204,7 @@ private fun LiveReadyContent(state: LivePlayUiState, actions: LivePlayActions) {
         PlayerArea(
             state = state,
             actions = actions,
+            pictureInPicture = pictureInPicture,
             modifier = if (state.frame.isFullBox) {
                 Modifier.fillMaxSize()
             } else {
@@ -218,7 +228,12 @@ private fun LiveReadyContent(state: LivePlayUiState, actions: LivePlayActions) {
 }
 
 @Composable
-private fun PlayerArea(state: LivePlayUiState, actions: LivePlayActions, modifier: Modifier) {
+private fun PlayerArea(
+    state: LivePlayUiState,
+    actions: LivePlayActions,
+    pictureInPicture: Boolean,
+    modifier: Modifier,
+) {
     val videoView = actions.player.videoView()
     Box(modifier = modifier.background(Color.Black)) {
         if (videoView != null) {
@@ -227,6 +242,8 @@ private fun PlayerArea(state: LivePlayUiState, actions: LivePlayActions, modifie
                 modifier = Modifier.fillMaxSize(),
             )
         }
+        // 系统画中画里只保留画面，直播控制按钮由系统 PiP 控制项接管
+        if (pictureInPicture) return@Box
         if (state.player.snapshotVisible) {
             Box(modifier = Modifier.fillMaxSize().background(Color.Black), contentAlignment = Alignment.Center) {
                 state.player.snapshotBitmap?.let { bitmap ->
@@ -324,6 +341,17 @@ private fun PlayerCornerButtons(actions: LivePlayerActions, modifier: Modifier) 
                 )
             },
             onClick = actions.onSettingsSheetOpen,
+        )
+        PlayerCornerButton(
+            icon = {
+                Icon(
+                    painter = painterResource(R.drawable.player_ic_pip),
+                    contentDescription = stringResource(R.string.player_picture_in_picture),
+                    tint = Color.White,
+                    modifier = Modifier.size(20.dp),
+                )
+            },
+            onClick = actions.onPictureInPicture,
         )
     }
 }

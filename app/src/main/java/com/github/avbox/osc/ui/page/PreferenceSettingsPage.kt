@@ -185,6 +185,14 @@ fun PreferenceSettingsScreen(onNavigateBack: () -> Unit) {
                 }
                 SettingsCard(SettingsCardPosition.MIDDLE) {
                     SettingsSwitchRow(
+                        title = stringResource(R.string.settings_picture_in_picture_auto),
+                        leadingIconRes = R.drawable.player_ic_pip,
+                        checked = playbackConfig.pictureInPictureAuto,
+                        onCheckedChange = { PlaybackSettingsState.pictureInPictureAuto = it },
+                    )
+                }
+                SettingsCard(SettingsCardPosition.MIDDLE) {
+                    SettingsSwitchRow(
                         title = stringResource(R.string.settings_m3u8_purify),
                         leadingIconRes = R.drawable.ic_pref_m3u8_purify,
                         checked = playbackConfig.m3u8Purify,

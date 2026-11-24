@@ -15,6 +15,7 @@ object SyncSettingsWhitelist {
         KVKeys.AUTO_SWITCH_LINE,
         KVKeys.M3U8_PURIFY,
         KVKeys.DETAIL_PLAY_FULLSCREEN,
+        KVKeys.PICTURE_IN_PICTURE_AUTO,
         KVKeys.LONG_PRESS_SPEED,
         KVKeys.LIVE_PLAY_SCALE,
         // 字幕

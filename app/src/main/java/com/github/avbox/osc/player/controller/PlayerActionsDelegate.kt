@@ -272,6 +272,11 @@ internal class PlayerActionsDelegate(private val host: VideoPlayerController) : 
         keepControlsAlive()
     }
 
+    override fun onPictureInPictureClicked() {
+        (host.playerActivity() as? com.github.avbox.osc.player.PageHost)?.onPictureInPictureRequest()
+        keepControlsAlive()
+    }
+
     override fun onLockClicked() {
         val newLocked = !host.state.locked
         host.state.updateLocked(newLocked)

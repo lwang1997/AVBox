@@ -155,6 +155,8 @@
     <string name="player_menu_line_danmu">线路弹幕</string>
     <string name="player_menu_params">播放参数</string>
     <string name="player_menu_more">更多</string>
+    <string name="player_picture_in_picture">画中画</string>
+    <string name="toast_pip_unsupported">当前设备不支持画中画</string>
     <string name="player_menu_parse">解析</string>
 
     <string name="player_params_speed">调整倍速</string>
@@ -523,6 +525,7 @@
     <string name="settings_nav_animation_disable">禁用导航动画</string>
     <string name="settings_nav_live_hidden">导航栏隐藏直播</string>
     <string name="settings_auto_switch_line">自动换线</string>
+    <string name="settings_picture_in_picture_auto">切后台自动画中画</string>
     <string name="settings_m3u8_purify">M3U8 净化</string>
     <string name="settings_logs_title">日志记录</string>
     <string name="settings_logs_subtitle">查看应用运行日志</string>

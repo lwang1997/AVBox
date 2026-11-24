@@ -52,23 +52,32 @@ fun PlayerOverlay(
     onTapPending: () -> Unit,
 ) {
     val screenWidthPx = LocalContext.current.resources.displayMetrics.widthPixels
+    val pictureInPicture = state.pictureInPicture
     BoxWithConstraints(
         Modifier
             .fillMaxSize()
-            .videoGestureLayer(
-                handler = gestureHandler,
-                sessionProvider = { size, downY ->
-                    val sizeW = size.width
-                    val sizeH = size.height
-                    if (state.overlayPanelOpen || sizeW <= 0 || sizeH <= 0) {
-                        null
-                    } else {
-                        gestureSession(sizeW, sizeH, screenWidthPx, downY)
-                    }
+            .then(
+                if (pictureInPicture) {
+                    Modifier
+                } else {
+                    Modifier.videoGestureLayer(
+                        handler = gestureHandler,
+                        sessionProvider = { size, downY ->
+                            val sizeW = size.width
+                            val sizeH = size.height
+                            if (state.overlayPanelOpen || sizeW <= 0 || sizeH <= 0) {
+                                null
+                            } else {
+                                gestureSession(sizeW, sizeH, screenWidthPx, downY)
+                            }
+                        },
+                        onTapPending = onTapPending,
+                    )
                 },
-                onTapPending = onTapPending,
             ),
     ) {
+        // 系统画中画里只保留画面，播放器按键/提示由系统 PiP 控制项接管
+        if (pictureInPicture) return@BoxWithConstraints
         val iconBox = playerIconBox(maxWidth - playerEdgePadding() * 2)
         PlayerTipLayer(state)
         PlayerSlideVisibility(

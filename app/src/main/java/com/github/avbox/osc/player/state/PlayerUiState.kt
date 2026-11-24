@@ -112,6 +112,9 @@ class PlayerUiState {
         private set
     var previewMode: Boolean by mutableStateOf(false)
         private set
+    /** 系统画中画中：隐藏播放器自带的控制层，只保留视频画面（控制由系统 PiP 按钮提供）。 */
+    var pictureInPicture: Boolean by mutableStateOf(false)
+        private set
     var timeStartText: String by mutableStateOf("")
         private set
     var timeEndText: String by mutableStateOf("")
@@ -462,6 +465,10 @@ class PlayerUiState {
         previewMode = value
     }
 
+    fun updatePictureInPicture(value: Boolean) {
+        pictureInPicture = value
+    }
+
     fun updateDanmuSearchAvailable(value: Boolean) {
         danmuSearchAvailable = value
     }
@@ -541,6 +548,7 @@ class ParamsSheetState(
     val onResetTime: () -> Unit,
     val onSearchDanmu: (() -> Unit)?,
     val onSearchDanmuBuiltin: (() -> Unit)? = null,
+    val onPictureInPicture: (() -> Unit)? = null,
 )
 
 class PictureParamsState(
@@ -634,6 +642,9 @@ interface PlayerActions {
 
     /** 小窗（预览）模式下底栏的全屏按钮。 */
     fun onFullscreenClicked() {}
+
+    /** 进入系统画中画。 */
+    fun onPictureInPictureClicked() {}
 
     fun onParseSelected(position: Int)
 

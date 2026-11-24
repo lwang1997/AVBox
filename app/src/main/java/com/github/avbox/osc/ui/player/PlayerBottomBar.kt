@@ -16,11 +16,11 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -60,7 +60,9 @@ private const val SEEK_MAX = 1000
 
 private const val SEEK_STEP_MS = 10_000L
 
-private val PreviewPlayPauseBox = 40.dp
+// 小窗按钮保持固定触摸尺寸，不随容器缩小；所有按键统一尺寸
+private val PreviewButtonBox = 40.dp
+private val PreviewButtonIcon = 22.dp
 
 private val SeekTrackHeight = 5.dp
 
@@ -81,7 +83,7 @@ fun PlayerBottomBar(
     val configuration = LocalConfiguration.current
     val portraitActions = configuration.orientation == Configuration.ORIENTATION_PORTRAIT
     val bottomPad = if (state.previewMode) {
-        (16.dp + playerDim(R.dimen.vs_30) / 2 - PreviewPlayPauseBox / 2).coerceAtLeast(0.dp)
+        (16.dp + playerDim(R.dimen.vs_30) / 2 - PreviewButtonBox / 2).coerceAtLeast(0.dp)
     } else {
         6.dp
     }
@@ -131,46 +133,37 @@ fun PlayerBottomBar(
         }
 
         if (state.previewMode) {
-            // 小窗底栏：整组控件水平居中，进度条占约 45% 宽
-            BoxWithConstraints(
+            // 小窗紧凑底栏：两行布局，进度条独占一行；下面是固定尺寸的触摸友好大按钮，
+            // 不随容器缩小，避免小窗里图标小到点不准。
+            PlayerSeekRow(
+                state = state,
+                actions = actions,
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(end = 44.dp),
-                contentAlignment = Alignment.Center,
+                    .padding(bottom = 2.dp),
+            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
             ) {
-                val seekWidth = maxWidth * 0.45f
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    PreviewPlayPauseButton(state, actions)
-                    CurrentTimeText(state)
-                    PlayerSeekRow(
-                        state = state,
-                        actions = actions,
-                        modifier = Modifier
-                            .width(seekWidth)
-                            .padding(horizontal = 8.dp),
-                    )
-                    Text(
-                        text = stringForTime(state.duration),
-                        color = Color.White,
-                        fontSize = playerTextSize(R.dimen.ts_20),
-                        fontWeight = FontWeight.Medium,
-                        maxLines = 1,
-                        modifier = Modifier.widthIn(min = 48.dp),
-                    )
-                    Box(
-                        modifier = Modifier
-                            .padding(start = 8.dp)
-                            .size(36.dp)
-                            .clickable { actions.onFullscreenClicked() },
-                        contentAlignment = Alignment.Center,
-                    ) {
-                        Image(
-                            painter = painterResource(R.drawable.player_ic_fullscreen),
-                            contentDescription = stringResource(R.string.player_fullscreen),
-                            modifier = Modifier.size(20.dp),
-                        )
-                    }
-                }
+                PreviewPlayPauseButton(state, actions)
+                CurrentTimeText(state)
+                Spacer(Modifier.weight(1f))
+                PreviewActionButton(
+                    iconRes = R.drawable.player_ic_pip,
+                    contentDescription = stringResource(R.string.player_picture_in_picture),
+                    onClick = actions::onPictureInPictureClicked,
+                )
+                PreviewActionButton(
+                    iconRes = R.drawable.player_ic_menu_episodes,
+                    contentDescription = stringResource(R.string.detail_episodes),
+                    onClick = actions::onEpisodeClicked,
+                )
+                PreviewActionButton(
+                    iconRes = R.drawable.player_ic_fullscreen,
+                    contentDescription = stringResource(R.string.player_fullscreen),
+                    onClick = actions::onFullscreenClicked,
+                )
             }
         } else {
             Row(verticalAlignment = Alignment.CenterVertically) {
@@ -387,10 +380,32 @@ private fun CurrentTimeText(state: PlayerUiState, modifier: Modifier = Modifier)
 }
 
 @Composable
+private fun PreviewActionButton(
+    @DrawableRes iconRes: Int,
+    contentDescription: String,
+    onClick: () -> Unit,
+) {
+    Box(
+        modifier = Modifier
+            .padding(start = 6.dp)
+            .size(PreviewButtonBox)
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Image(
+            painter = painterResource(iconRes),
+            contentDescription = contentDescription,
+            colorFilter = ColorFilter.tint(Color.White.copy(alpha = 0.9f)),
+            modifier = Modifier.size(PreviewButtonIcon),
+        )
+    }
+}
+
+@Composable
 private fun PreviewPlayPauseButton(state: PlayerUiState, actions: PlayerActions) {
     val playing = state.playbackActive
     Box(
-        modifier = Modifier.size(PreviewPlayPauseBox),
+        modifier = Modifier.size(PreviewButtonBox),
         contentAlignment = Alignment.Center,
     ) {
         Image(
@@ -400,7 +415,7 @@ private fun PreviewPlayPauseButton(state: PlayerUiState, actions: PlayerActions)
             contentDescription = stringResource(if (playing) R.string.common_pause else R.string.common_play),
             colorFilter = ColorFilter.tint(Color.White.copy(alpha = 0.9f)),
             modifier = Modifier
-                .size(22.dp)
+                .size(PreviewButtonIcon)
                 .playerPressEffect(onTap = actions::onPlayPauseClicked),
         )
     }

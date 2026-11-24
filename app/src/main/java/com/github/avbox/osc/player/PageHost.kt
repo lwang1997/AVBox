@@ -22,4 +22,7 @@ interface PageHost {
 
     /** 小窗播放器点「全屏」时由页面接管（详情页进全屏）。 */
     fun onPlayerFullscreenRequest() {}
+
+    /** 播放器请求进入系统画中画，由持有窗口的 Activity 执行。 */
+    fun onPictureInPictureRequest() {}
 }

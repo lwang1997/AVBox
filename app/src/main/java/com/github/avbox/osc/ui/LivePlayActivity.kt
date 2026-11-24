@@ -4,6 +4,7 @@ package com.github.avbox.osc.ui
 
 import android.content.pm.ActivityInfo
 import android.content.res.Configuration
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.widget.Toast
@@ -12,6 +13,7 @@ import androidx.activity.viewModels
 import com.github.avbox.osc.ui.theme.enableTransparentEdgeToEdge
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.ui.platform.ComposeView
 import androidx.core.view.WindowCompat
@@ -29,6 +31,8 @@ import com.github.avbox.osc.player.KernelReusePolicy
 import com.github.avbox.osc.player.LivePlayerManager
 import com.github.avbox.osc.player.PlayerKernelView
 import com.github.avbox.osc.player.PlaybackService
+import com.github.avbox.osc.player.PictureInPictureHelper
+import com.github.avbox.osc.player.state.PlaybackSettingsState
 import com.github.avbox.osc.player.controller.ComposeLiveController
 import com.github.avbox.osc.player.engine.MediaSources
 import com.github.avbox.osc.player.core.PlayState
@@ -191,7 +195,11 @@ class LivePlayActivity : BaseActivity() {
             AVBoxTheme(manageStatusBarIcons = false) {
                 SheetHostScaffold {
                     val state by uiState.collectAsStateWithLifecycle()
-                    LiveScreen(state = state, actions = remember { liveActions() })
+                    LiveScreen(
+                        state = state,
+                        actions = remember { liveActions() },
+                        pictureInPicture = pipUiVisible.value,
+                    )
                 }
             }
         }
@@ -212,9 +220,54 @@ class LivePlayActivity : BaseActivity() {
         }
     }
 
+    /** 正在画中画中：onPause 仍会触发，但不能暂停直播画面。 */
+    private var inPictureInPicture = false
+
+    /** 驱动 Compose 隐藏直播播放器上的常驻按钮。 */
+    private val pipUiVisible = mutableStateOf(false)
+
+    private fun isInPip(): Boolean =
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && isInPictureInPictureMode
+
+    private fun canEnterPictureInPicture(): Boolean =
+        PictureInPictureHelper.isSupported(this) && kernelView?.isPlaying == true
+
+    private fun enterPictureInPicture() {
+        if (!canEnterPictureInPicture()) {
+            if (!PictureInPictureHelper.isSupported(this)) {
+                Toast.makeText(this, R.string.toast_pip_unsupported, Toast.LENGTH_SHORT).show()
+            }
+            return
+        }
+        val rect = PictureInPictureHelper.sourceRectHint(kernelView?.playerContainer())
+        pipUiVisible.value = true
+        if (PictureInPictureHelper.enter(this, true, rect)) {
+            inPictureInPicture = true
+            AppLog.i(TAG + " enter picture-in-picture")
+        } else {
+            pipUiVisible.value = false
+        }
+    }
+
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        if (!PlaybackSettingsState.config.pictureInPictureAuto) return
+        if (inPictureInPicture || isInPip()) return
+        enterPictureInPicture()
+    }
+
+    override fun onPictureInPictureModeChanged(
+        isInPictureInPictureMode: Boolean,
+        newConfig: Configuration,
+    ) {
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
+        inPictureInPicture = isInPictureInPictureMode
+        pipUiVisible.value = isInPictureInPictureMode
+    }
+
     override fun onPause() {
         super.onPause()
-        if (!exitingLivePlay) kernelView?.pause()
+        if (!exitingLivePlay && !inPictureInPicture && !isInPip()) kernelView?.pause()
     }
 
     override fun onDestroy() {
@@ -753,6 +806,7 @@ class LivePlayActivity : BaseActivity() {
         player = LivePlayerActions(
             videoView = { kernelView },
             onExitFullscreen = { applyFullscreen(false) },
+            onPictureInPicture = { enterPictureInPicture() },
             onEpgSheetOpen = { vm.showEpgSheet() },
             onSettingsSheetOpen = { openSettingsSheet() },
             onTimeshiftSeek = { onTimeshiftSeek(it) },

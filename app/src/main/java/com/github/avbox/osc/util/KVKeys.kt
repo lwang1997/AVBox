@@ -56,6 +56,8 @@ object KVKeys {
     const val LOG_LEVEL = "log_level"
     const val LOG_TO_FILE = "log_to_file"
     const val DETAIL_PLAY_FULLSCREEN = "detail_play_fullscreen"
+    const val PICTURE_IN_PICTURE_AUTO = "picture_in_picture_auto"
+    const val PICTURE_IN_PICTURE_AUTO_DEFAULT = true
     const val AUTO_SWITCH_LINE = "auto_switch_line"
     const val AUTO_SWITCH_LINE_DEFAULT = true
     const val COLLECT_COLUMNS = "collect_columns"

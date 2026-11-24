@@ -104,6 +104,7 @@ class KVKeySpec : KVDecoder.TypeRegistry {
             register(KVKeys.LIVE_SHOW_TIME, false)
             register(KVKeys.M3U8_PURIFY, false)
             register(KVKeys.AUTO_SWITCH_LINE, false)
+            register(KVKeys.PICTURE_IN_PICTURE_AUTO, true)
             register(KVKeys.DEFAULT_LOAD_LIVE, false)
             register(KVKeys.INCOGNITO, false)
             register(KVKeys.HIDE_STATUS_BAR, false)

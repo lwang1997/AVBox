@@ -112,6 +112,14 @@ internal fun PlayerActionIcons(
             expand = spread,
             onClick = actions::onVideoTrackClicked,
         )
+        PlayerActionIconButton(
+            iconRes = R.drawable.player_ic_pip,
+            contentDescription = stringResource(R.string.player_picture_in_picture),
+            box = size,
+            iconSize = iconSize,
+            expand = spread,
+            onClick = actions::onPictureInPictureClicked,
+        )
     }
 }
 

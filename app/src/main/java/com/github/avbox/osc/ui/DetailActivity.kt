@@ -5,6 +5,7 @@ import android.content.Intent
 import android.content.pm.ActivityInfo
 import android.content.res.Configuration
 import android.net.Uri
+import android.os.Build
 import android.os.Looper
 import android.webkit.WebView
 import android.widget.Toast
@@ -23,6 +24,7 @@ import com.github.avbox.osc.ui.base.BaseActivity
 import com.github.avbox.osc.bean.VodInfo
 import com.github.avbox.osc.ui.components.SheetHostScaffold
 import com.github.avbox.osc.player.PageHost
+import com.github.avbox.osc.player.PictureInPictureHelper
 import com.github.avbox.osc.player.PlaybackController
 import com.github.avbox.osc.player.PlaybackService
 import com.github.avbox.osc.player.engine.MediaSources
@@ -106,9 +108,7 @@ class DetailActivity : BaseActivity(), PageHost {
                 if (vm.exitingFullscreen.value) return
                 if (vm.fullScreen.value) {
                     if (container != null && container.onBackPressed()) return
-                    if (DetailPlaybackPolicy.plan(DetailPlaybackEntry.ExitFullscreen).stopPlayback) {
-                        container?.stopForExitFullscreen()
-                    }
+                    // 退出全屏回小窗：视频继续播放，不调用 stopForExitFullscreen（那会暂停并释放播放）
                     vm.onFullScreenToggleRequested(false, playbackFacts())
                     container?.hideTipOnUiThread()
                 } else {
@@ -216,6 +216,64 @@ class DetailActivity : BaseActivity(), PageHost {
     override fun onPlayerFullscreenRequest() {
         if (vm.fullScreen.value || vm.enteringFullscreen.value || vm.exitingFullscreen.value) return
         vm.onFullScreenToggleRequested(true, playbackFacts())
+    }
+
+    /** 正在画中画中：此时 Activity 仍会走 onPause，但不能暂停视频。 */
+    private var inPictureInPicture = false
+
+    private fun isInPip(): Boolean =
+        Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && isInPictureInPictureMode
+
+    private fun canEnterPictureInPicture(): Boolean {
+        if (!PictureInPictureHelper.isSupported(this)) return false
+        val container = playContainer ?: return false
+        return container.isPlaybackActive() && !isAudioContent()
+    }
+
+    override fun onPictureInPictureRequest() {
+        enterPictureInPicture()
+    }
+
+    private fun enterPictureInPicture() {
+        if (!canEnterPictureInPicture()) {
+            if (!PictureInPictureHelper.isSupported(this)) {
+                Toast.makeText(this, R.string.toast_pip_unsupported, Toast.LENGTH_SHORT).show()
+            }
+            return
+        }
+        val container = requireNotNull(playContainer)
+        val rect = PictureInPictureHelper.sourceRectHint(container.kernelView?.playerContainer())
+        val playing = container.kernelView?.isPlaying == true
+        val ui = container.uiState()
+        ui.updatePictureInPicture(true)
+        if (PictureInPictureHelper.enter(this, playing, rect)) {
+            inPictureInPicture = true
+            AppLog.i("echo-pip: enter from detail")
+        } else {
+            ui.updatePictureInPicture(false)
+        }
+    }
+
+    override fun onUserLeaveHint() {
+        super.onUserLeaveHint()
+        if (!PlaybackSettingsState.config.pictureInPictureAuto) return
+        if (inPictureInPicture || isInPip()) return
+        enterPictureInPicture()
+    }
+
+    override fun onPictureInPictureModeChanged(
+        isInPictureInPictureMode: Boolean,
+        newConfig: Configuration,
+    ) {
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
+        inPictureInPicture = isInPictureInPictureMode
+        playContainer?.uiState()?.updatePictureInPicture(isInPictureInPictureMode)
+        if (isInPictureInPictureMode) {
+            playContainer?.uiState()?.clearOverlays()
+        } else {
+            // 退出小窗回到页面时，补一次状态校准，避免小窗期间的系统配置变化影响播放器
+            playContainer?.hostResume()
+        }
     }
 
     override fun showEpisodeSheet() {
@@ -467,7 +525,10 @@ class DetailActivity : BaseActivity(), PageHost {
     }
 
     override fun onPause() {
-        playContainer?.hostPause()
+        // 进入画中画时 Activity 仍会走 onPause，此时不能暂停视频，否则小窗是静止画面
+        if (!inPictureInPicture && !isInPip()) {
+            playContainer?.hostPause()
+        }
         super.onPause()
     }
 

@@ -87,6 +87,14 @@ class KVKeySpecTest {
     }
 
     @Test
+    fun pictureInPictureAuto_isRegistered() {
+        assertEquals(
+            TypeToken.get(java.lang.Boolean::class.java).type,
+            spec.typeOf(KVKeys.PICTURE_IN_PICTURE_AUTO),
+        )
+    }
+
+    @Test
     fun collectColumns_isRegistered() {
         assertEquals(
             TypeToken.get(Integer::class.java).type,

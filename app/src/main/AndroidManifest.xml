@@ -70,12 +70,14 @@
 
         <activity
             android:name=".ui.LivePlayActivity"
-            android:configChanges="orientation|screenSize|keyboardHidden|screenLayout|smallestScreenSize" />
+            android:supportsPictureInPicture="true"
+            android:configChanges="orientation|screenSize|keyboardHidden|screenLayout|smallestScreenSize|density" />
         <activity
             android:name=".ui.DetailActivity"
             android:launchMode="singleTop"
             android:windowSoftInputMode="adjustResize"
-            android:configChanges="orientation|screenSize" />
+            android:supportsPictureInPicture="true"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|density" />
         <activity
             android:name=".ui.MusicPlayerActivity"
             android:configChanges="orientation|screenSize" />
