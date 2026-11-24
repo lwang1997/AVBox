@@ -4,6 +4,7 @@ import android.widget.Toast
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -61,6 +62,7 @@ fun DanmuSettingSheet(sheet: DanmuSettingSheetState, onDismiss: () -> Unit) {
             var autoSearchIdx by remember {
                 mutableIntStateOf(if (DanmuSettingsState.config.autoSearch) 0 else 1)
             }
+            var shownIdx by remember { mutableIntStateOf(if (sheet.danmuShown) 0 else 1) }
             var timeOffset by remember { mutableIntStateOf(DanmuSettingsState.config.timeOffsetSeconds) }
             Spacer(Modifier.height(playerDim(R.dimen.vs_24)))
             SheetHeaderRow(title = stringResource(R.string.danmu_settings)) {
@@ -76,6 +78,7 @@ fun DanmuSettingSheet(sheet: DanmuSettingSheetState, onDismiss: () -> Unit) {
                         line = DanmuSettingsState.config.maxLine
                         alpha = Math.round(DanmuSettingsState.config.alpha * 100)
                         autoSearchIdx = if (DanmuSettingsState.config.autoSearch) 0 else 1
+                        shownIdx = if (DanmuSettingsState.config.open) 0 else 1
                         timeOffset = DanmuSettingsState.config.timeOffsetSeconds
                     },
                 )
@@ -89,6 +92,18 @@ fun DanmuSettingSheet(sheet: DanmuSettingSheetState, onDismiss: () -> Unit) {
                 postSettings(false)
             }
 
+            SheetLabelRow(stringResource(R.string.settings_danmu_switch)) {
+                SheetChipRow(
+                    listOf(
+                        stringResource(R.string.common_on),
+                        stringResource(R.string.common_off),
+                    ),
+                    shownIdx,
+                    onSelect = { idx ->
+                        shownIdx = idx
+                        sheet.onShownChange(idx == 0)
+                    })
+            }
             SheetLabelRow(stringResource(R.string.danmu_online)) {
                 SheetButton(
                     text = stringResource(R.string.common_search),
@@ -316,8 +331,12 @@ fun DanmuSearchSheet(sheet: DanmuSearchSheetState, onDismiss: () -> Unit) {
                         modifier = Modifier.weight(1f),
                         onSubmit = { search(word) },
                     )
-                    Spacer(Modifier.width(playerDim(R.dimen.vs_5)))
-                    SheetButton(text = stringResource(R.string.common_search), onClick = { search(word) })
+                    Spacer(Modifier.width(playerDim(R.dimen.vs_10)))
+                    SheetButton(
+                        text = stringResource(R.string.common_search),
+                        onClick = { search(word) },
+                        contentPadding = playerDim(R.dimen.vs_20),
+                    )
                 }
                 Spacer(Modifier.height(playerDim(R.dimen.vs_10)))
                 Box(
@@ -325,12 +344,20 @@ fun DanmuSearchSheet(sheet: DanmuSearchSheetState, onDismiss: () -> Unit) {
                         .weight(1f)
                         .padding(horizontal = playerDim(R.dimen.vs_30)),
                 ) {
-                    if (loading) {
-                        SheetLoading(size = playerDim(R.dimen.vs_50))
-                    } else {
-                        LazyColumn(verticalArrangement = Arrangement.spacedBy(playerDim(R.dimen.vs_5))) {
+                    when {
+                        loading -> SheetLoading(size = playerDim(R.dimen.vs_50))
+                        results.isEmpty() -> Text(
+                            text = stringResource(R.string.danmu_search_empty),
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            fontSize = playerTextSize(R.dimen.ts_20),
+                            modifier = Modifier.align(Alignment.Center),
+                        )
+                        else -> LazyColumn(
+                            modifier = Modifier.fillMaxSize(),
+                            verticalArrangement = Arrangement.spacedBy(playerDim(R.dimen.vs_5)),
+                        ) {
                             itemsIndexed(results) { _, item ->
-                                SheetButton(text = item.name, onClick = {
+                                SheetListRow(text = item.name, onClick = {
                                     loading = true
                                     scope.launch {
                                         val danmu = try {

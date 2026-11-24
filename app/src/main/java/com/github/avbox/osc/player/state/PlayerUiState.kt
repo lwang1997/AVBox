@@ -576,6 +576,9 @@ class DanmuSettingSheetState(
     val onReset: () -> Unit = {},
     val onSettingsApplied: (Boolean) -> Unit = {},
     val onAutoSearchEnabled: () -> Unit = {},
+    /** 面板打开时弹幕是否显示。 */
+    val danmuShown: Boolean = true,
+    val onShownChange: (Boolean) -> Unit = {},
 )
 
 class DanmuSearchSheetState(

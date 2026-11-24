@@ -219,7 +219,7 @@ internal class PlayerActionsDelegate(private val host: VideoPlayerController) : 
     override fun onDanmuSettingLongClicked() {
         val opened = host.listener?.toggleDanmu() ?: false
         hideBottom()
-        Toast.makeText(host.context, host.context.getString(if (opened) R.string.player_danmu_opened else R.string.player_danmu_temp_closed), Toast.LENGTH_SHORT).show()
+        Toast.makeText(host.context, host.context.getString(if (opened) R.string.player_danmu_opened else R.string.player_danmu_closed), Toast.LENGTH_SHORT).show()
     }
 
     override fun onDanmuSearchClicked() {

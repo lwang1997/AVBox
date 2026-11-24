@@ -181,16 +181,35 @@ class DanmuLoadController(
         releaseView()
     }
 
-    fun toggle(): Boolean {
-        if (temporarilyClosed) {
-            temporarilyClosed = false
-            reloadForPlayback()
-            startIfReady()
-            return true
+    /** 弹幕当前是否显示：总开关打开，且本次播放没有临时关闭。 */
+    fun isShown(): Boolean = DanmuSettingsState.config.open && !temporarilyClosed
+
+    /**
+     * 播放中的弹幕开关：写回总开关并立即生效。
+     * 关闭只停画面并保留已加载的弹幕文本，重新打开时直接复用，不重新请求接口。
+     */
+    fun setShown(shown: Boolean) {
+        if (isShown() == shown) return
+        temporarilyClosed = !shown
+        DanmuSettingsState.open = shown
+        if (!shown) {
+            close()
+            return
         }
-        temporarilyClosed = true
-        close()
-        return false
+        if (!isVideoReady()) {
+            // 配置照常生效，等播放器就绪后再解析
+            applySettings(false)
+            pendingPrepare = !TextUtils.isEmpty(danmuText)
+            return
+        }
+        applySettings(true)
+        startIfReady()
+    }
+
+    fun toggle(): Boolean {
+        val shown = !isShown()
+        setShown(shown)
+        return shown
     }
 
     fun reloadForPlayback() {

@@ -90,6 +90,7 @@
     <string name="danmu_time_offset">Timing</string>
     <string name="danmu_time_offset_value">%1$s s</string>
     <string name="danmu_search_hint">Enter danmaku name</string>
+    <string name="danmu_search_empty">Enter a keyword to search online danmaku</string>
     <string name="toast_input_empty">Input cannot be empty</string>
     <string name="toast_danmu_not_found">No matching danmaku found</string>
 
@@ -572,7 +573,7 @@
     <string name="player_select_speed">Select playback speed</string>
     <string name="player_subtitle_closed">Subtitles off</string>
     <string name="player_danmu_opened">Danmaku on</string>
-    <string name="player_danmu_temp_closed">Danmaku temporarily off</string>
+    <string name="player_danmu_closed">Danmaku off</string>
     <string name="player_switch_line">Switched to line %1$s</string>
     <string name="player_get_url_timeout">Timed out getting the playback URL</string>
     <string name="player_play_timeout">Playback timed out</string>

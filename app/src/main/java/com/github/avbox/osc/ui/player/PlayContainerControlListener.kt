@@ -29,6 +29,15 @@ class PlayContainerControlListener(private val container: PlayContainer) : VodCo
                         container.scheduler.searchDanmuForCurrentEpisode()
                     }
                 },
+                danmuShown = container.danmuLoadController?.isShown() ?: DanmuSettingsState.open,
+                onShownChange = { shown ->
+                    val danmu = container.danmuLoadController
+                    if (danmu != null) {
+                        danmu.setShown(shown)
+                    } else {
+                        DanmuSettingsState.open = shown
+                    }
+                },
             ),
         )
     }

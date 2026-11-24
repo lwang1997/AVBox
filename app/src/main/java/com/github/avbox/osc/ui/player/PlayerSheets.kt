@@ -281,6 +281,38 @@ internal fun SheetButton(
 
 private const val ACTION_FLASH_MS = 100L
 
+/**
+ * 列表行：整行铺满、文字左对齐并留出内边距。
+ * 搜索结果这类长文本不能用内容宽度包住（会被圆角背景裁到字），也不能零内边距。
+ */
+@Composable
+internal fun SheetListRow(
+    text: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Row(
+        modifier
+            .fillMaxWidth()
+            .background(MaterialTheme.colorScheme.surfaceBright, ItemShape)
+            .pointerInput(onClick) {
+                detectTapGestures(onTap = { onClick() })
+            }
+            .padding(horizontal = playerDim(R.dimen.vs_20), vertical = playerDim(R.dimen.vs_10)),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        Text(
+            text = text,
+            color = MaterialTheme.colorScheme.onSurface,
+            fontSize = playerTextSize(R.dimen.ts_20),
+            fontWeight = FontWeight.Medium,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.weight(1f),
+        )
+    }
+}
+
 @Composable
 internal fun SheetTextAction(
     text: String,

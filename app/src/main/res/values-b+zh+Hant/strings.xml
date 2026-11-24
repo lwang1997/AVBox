@@ -90,6 +90,7 @@
     <string name="danmu_time_offset">時間軸</string>
     <string name="danmu_time_offset_value">%1$s 秒</string>
     <string name="danmu_search_hint">請輸入彈幕名稱</string>
+    <string name="danmu_search_empty">輸入關鍵詞後搜尋線上彈幕</string>
     <string name="toast_input_empty">輸入內容不能為空</string>
     <string name="toast_danmu_not_found">未查詢到符合的彈幕</string>
 
@@ -572,7 +573,7 @@
     <string name="player_select_speed">請選擇播放倍速</string>
     <string name="player_subtitle_closed">字幕已關閉</string>
     <string name="player_danmu_opened">彈幕已開啟</string>
-    <string name="player_danmu_temp_closed">彈幕已暫時關閉</string>
+    <string name="player_danmu_closed">彈幕已關閉</string>
     <string name="player_switch_line">線路切換至%1$s</string>
     <string name="player_get_url_timeout">取得播放位址逾時</string>
     <string name="player_play_timeout">播放逾時</string>
