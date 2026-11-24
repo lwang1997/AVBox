@@ -22,6 +22,11 @@ object ConfigParser {
 
     private val gson = Gson()
 
+    // i18n: keep(R4:drpy 规则 query 内相对路径保护，对齐 FongMi Decoder.JS_URI)
+    private const val JS_URI_PATTERN = "\"(\\.|\\.\\.)/(.?|.+?)\\.js\\?(.?|.+?)\""
+    private const val JS_QUERY_DOT = "__AVBOX_JS_DOT__"
+    private const val JS_QUERY_DOTDOT = "__AVBOX_JS_DOTDOT__"
+
     private fun isEmpty(text: String?): Boolean {
         return text == null || text.length == 0
     }
@@ -254,10 +259,39 @@ object ConfigParser {
                 url = "http://" + url
             }
             if (url.startsWith("clan://")) url = clanToAddress(url, localFileBase)
-            content = content.replace("../", UriUtil.resolve(url, "../"))
-            content = content.replace("./", UriUtil.resolve(url, "./"))
+            // i18n: keep(R4:保护 drpy 规则 query 内相对路径，如 ./js/rule.js?params=../json/cats.json)
+            // 对齐 FongMi Decoder.replace()：先把带 query 的 .js 字段值里 query 部分的 ./ ../ 换成占位符，
+            // 使全局替换只作用于字段值开头，query 内相对路径（相对规则文件目录）得以保留。
+            val protected = protectJsUriQuery(content)
+            var fixed = protected.replace("../", UriUtil.resolve(url, "../"))
+            fixed = fixed.replace("./", UriUtil.resolve(url, "./"))
+            content = fixed
+                .replace(JS_QUERY_DOT, "./")
+                .replace(JS_QUERY_DOTDOT, "../")
         }
         return content
+    }
+
+    /**
+     * 只处理 "xxx.js?query" 形式的 JSON 字段值（FongMi Decoder.JS_URI 同款）：
+     * query 内的 ./ 与 ../ 是相对规则文件目录的，需保留，不能按配置目录解析。
+     */
+    private fun protectJsUriQuery(content: String): String {
+        val matcher = RegexUtils.getPattern(JS_URI_PATTERN).matcher(content)
+        val result = StringBuilder()
+        var last = 0
+        while (matcher.find()) {
+            val ext = matcher.group()
+            result.append(content, last, matcher.start())
+            val head = ext.substring(0, ext.indexOf('?') + 1)
+            val query = ext.substring(ext.indexOf('?') + 1)
+                .replace("../", JS_QUERY_DOTDOT)
+                .replace("./", JS_QUERY_DOT)
+            result.append(head).append(query)
+            last = matcher.end()
+        }
+        result.append(content, last, content.length)
+        return result.toString()
     }
 
     @JvmStatic

@@ -352,6 +352,19 @@ class ConfigParserTest {
     }
 
     @Test
+    fun fixContentPath_keepsDrpyRuleQueryRelative() {
+        // 采集之王：ext 开头的 ./ 解析为绝对 URL，但 query 内 params=../json/ 是相对规则文件目录的，
+        // 不能被改写为相对配置目录，否则 drpy2 urljoin 得到错误地址（返回 500）。
+        val content = "{\"api\":\"./js/drpy2.min.js\"," +
+            "\"ext\":\"./js/采集之王.js?type=url&params=../json/采集静态.json\$1\$1\"}"
+        assertEquals(
+            "{\"api\":\"http://h/dir/js/drpy2.min.js\"," +
+                "\"ext\":\"http://h/dir/js/采集之王.js?type=url&params=../json/采集静态.json\$1\$1\"}",
+            ConfigParser.fixContentPath("http://h/dir/api.json", content, NEVER),
+        )
+    }
+
+    @Test
     fun configUrl_keepsHttpAndAddsScheme() {
         val http = ConfigParser.configUrl("http://a/config.json", NEVER)
         assertEquals("http://a/config.json", http.url)
