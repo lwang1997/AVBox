@@ -41,7 +41,8 @@ fun VodCard(
             ) {
                 Box(modifier = Modifier.aspectRatio(2f / 3f)) {
                     VodPoster(video.name, video.pic, year = video.year, sourceKey = video.sourceKey, tmdbCacheOnly = true, altName = video.en)
-                    RatingBadge(video, Modifier.align(Alignment.TopEnd))
+                    YearBadge(video.year, Modifier.align(Alignment.TopEnd))
+                    RemarkBadge(video.note, Modifier.align(Alignment.BottomStart))
                 }
             }
             Text(
@@ -77,7 +78,7 @@ fun VodCard(
                         )
                     ),
             )
-            RatingBadge(video, Modifier.align(Alignment.TopEnd))
+            YearBadge(video.year, Modifier.align(Alignment.TopEnd))
             Column(modifier = Modifier.align(Alignment.BottomStart).padding(10.dp)) {
                 Text(
                     text = video.name ?: "",
@@ -88,16 +89,9 @@ fun VodCard(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
-                val meta = buildString {
-                    if (video.year > 0) append(video.year)
-                    if (!video.area.isNullOrBlank()) {
-                        if (isNotEmpty()) append(" / ")
-                        append(video.area)
-                    }
-                }
-                if (meta.isNotEmpty()) {
+                if (!video.note.isNullOrBlank()) {
                     Text(
-                        text = meta,
+                        text = video.note.orEmpty(),
                         style = MaterialTheme.typography.bodyMedium,
                         fontSize = 12.sp,
                         color = Color.White.copy(alpha = 0.7f),
@@ -111,13 +105,30 @@ fun VodCard(
 }
 
 @Composable
-private fun RatingBadge(video: Movie.Video, modifier: Modifier = Modifier) {
-    val badge = ratingBadgeText(video.note) ?: return
+private fun YearBadge(year: Int, modifier: Modifier = Modifier) {
+    if (year <= 0) return
     Text(
-        text = badge,
+        text = year.toString(),
         style = MaterialTheme.typography.labelMedium,
         color = MaterialTheme.colorScheme.onSurface,
         maxLines = 1,
+        modifier = modifier
+            .padding(8.dp)
+            .clip(RoundedCornerShape(12.dp))
+            .background(MaterialTheme.colorScheme.surface.copy(alpha = 0.7f))
+            .padding(horizontal = 8.dp, vertical = 2.dp),
+    )
+}
+
+@Composable
+private fun RemarkBadge(note: String?, modifier: Modifier = Modifier) {
+    if (note.isNullOrBlank()) return
+    Text(
+        text = note.orEmpty(),
+        style = MaterialTheme.typography.labelMedium,
+        color = MaterialTheme.colorScheme.onSurface,
+        maxLines = 1,
+        overflow = TextOverflow.Ellipsis,
         modifier = modifier
             .padding(8.dp)
             .clip(RoundedCornerShape(12.dp))
