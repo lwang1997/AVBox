@@ -104,7 +104,15 @@ object Anime4kSettings {
     @Volatile
     private var sharpenCached = -1f
 
-    fun enabled(): Boolean = KV.get(KVKeys.ANIME4K_ENABLED, false)
+    /**
+     * 是否手动开启。只剩播放器面板的「本次播放」开关（[Anime4kStatus.sessionForced]）：
+     * 换片即清，不会留下任何全局常开状态。旧的 `ANIME4K_ENABLED` 键不再读取
+     * （设置页没有总开关了，之前误开的值一律忽略）。
+     *
+     * 手动开启表示用户明确要求这个视频走增强，因此跳过 [Anime4kAutoPolicy] 的自动上限
+     * ——「自动开启上限」只约束自动开启。
+     */
+    fun manualActive(): Boolean = Anime4kStatus.sessionForced
 
     fun deblur(): Boolean = KV.get(KVKeys.ANIME4K_DEBLUR, false)
 
@@ -162,6 +170,13 @@ object Anime4kStatus {
     @Volatile
     var sessionDisabled = false
 
+    /**
+     * 播放器面板的「本次播放」开启。不写全局总开关，换片（[resetSession]）即清，
+     * 因此不会像旧实现那样把设置页的「自动开启上限」永久废掉。
+     */
+    @Volatile
+    var sessionForced = false
+
     fun unavailable(): Boolean = failed
 
     fun onBuildSucceeded() {
@@ -186,5 +201,6 @@ object Anime4kStatus {
     fun resetSession() {
         onPrepare()
         sessionDisabled = false
+        sessionForced = false
     }
 }

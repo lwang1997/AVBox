@@ -181,6 +181,7 @@
     <string name="player_anime4k_deblur">Deblur</string>
     <string name="player_anime4k_mode_anime">Anime</string>
     <string name="player_anime4k_mode_real_movie">Live action</string>
+    <string name="player_anime4k_session_hint">This switch only affects the current video. The next video follows the auto enable rule.</string>
     <string name="player_picture_preset_natural">Natural</string>
     <string name="player_picture_preset_vivid">Vivid</string>
     <string name="player_picture_preset_clear">Clear</string>

@@ -52,6 +52,7 @@ object PictureEffects {
     private var comparing = false
 
     private var anime4kOpened = false
+    private var anime4kForcedOpened = false
     private var anime4kTierOpened: Anime4kTier = Anime4kTier.default
     private var anime4kModeOpened: Anime4kMode = Anime4kMode.default
     private var anime4kDeblurOpened = false
@@ -67,7 +68,7 @@ object PictureEffects {
     fun anime4kMode(): Anime4kMode = sessionMode
 
     fun anime4kActive(): Boolean =
-        (Anime4kSettings.enabled() || Anime4kStatus.autoActive) && !Anime4kStatus.sessionDisabled
+        (Anime4kSettings.manualActive() || Anime4kStatus.autoActive) && !Anime4kStatus.sessionDisabled
 
     fun comparing(): Boolean = comparing
 
@@ -100,7 +101,7 @@ object PictureEffects {
     }
 
     private fun wanted(): Boolean =
-        !applied().isNoOp || Anime4kSettings.enabled() || Anime4kSettings.autoEnabled()
+        !applied().isNoOp || Anime4kSettings.manualActive() || Anime4kSettings.autoEnabled()
 
     fun selectPreset(preset: PicturePreset) {
         KV.put(KVKeys.PICTURE_PRESET, preset.name)
@@ -141,6 +142,18 @@ object PictureEffects {
         }
     }
 
+    /**
+     * 播放器面板的 Anime4K 开关：只作用于本次播放，不落库。
+     * 下一次起播回到「低分辨率自动开启 + 上限」的自动判断；「关」只让本次播放直通。
+     */
+    fun setAnime4kSessionEnabled(enabled: Boolean) {
+        Anime4kStatus.sessionForced = enabled
+        // 本次链路已带档位在跑（自动命中）：无需重建，直接记下已生效，
+        // 否则之后每次面板操作都会再触发一次内核重建。
+        if (Anime4kStatus.sessionForced && Anime4kStatus.tierActive) anime4kForcedOpened = true
+        setAnime4kSessionDisabled(!enabled)
+    }
+
     fun onContentReplaced(url: String?) {
         if (url == contentKey) return
         contentKey = url
@@ -172,7 +185,7 @@ object PictureEffects {
         }
         val profile = applied()
         val tier = Anime4kTier.current()
-        val manual = Anime4kSettings.enabled()
+        val manual = Anime4kSettings.manualActive()
         val auto = Anime4kSettings.autoEnabled()
         val anime4kWanted = manual || auto
         if (!sessionLoaded) {
@@ -184,6 +197,7 @@ object PictureEffects {
         anime4k.autoMaxWidth = if (auto) Anime4kSettings.autoMaxWidth() else 0
         anime4k.tier = if (anime4kWanted) tier else null
         anime4kOpened = anime4kWanted
+        anime4kForcedOpened = Anime4kStatus.sessionForced
         anime4kTierOpened = tier
         anime4kModeOpened = sessionMode
         anime4kDeblurOpened = Anime4kSettings.deblur()
@@ -229,12 +243,15 @@ object PictureEffects {
     fun consumeRestartNeeded(): Boolean {
         val player = current?.get() ?: return false
         if (tunneling || player.isPictureHdrSource()) return false
-        val anime4kWanted = Anime4kSettings.enabled() || Anime4kSettings.autoEnabled()
+        val anime4kWanted = Anime4kSettings.manualActive() || Anime4kSettings.autoEnabled()
         if (anime4kWanted != anime4kOpened) return true
+        // 面板「本次播放」开在自动未命中的视频上（2K/4K）：链路当时是被上限裁掉的，
+        // 必须重建一次才能把 manualEnabled 带进去，否则点了没反应。
+        if (Anime4kStatus.sessionForced && !anime4kForcedOpened) return true
         if (anime4kWanted && Anime4kTier.current() != anime4kTierOpened) return true
         if (anime4kWanted && sessionMode != anime4kModeOpened) return true
         if (anime4kWanted && Anime4kSettings.deblur() != anime4kDeblurOpened) return true
-        if (Anime4kSettings.enabled() && !Anime4kStatus.tierActive) return true
+        if (Anime4kSettings.manualActive() && !Anime4kStatus.tierActive) return true
         return restartNeeded(wanted(), openedThisSession, preset() == PicturePreset.Original)
     }
 

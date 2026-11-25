@@ -99,8 +99,9 @@ internal class PlayerConfigDelegate(private val host: VideoPlayerController) {
                 anime4kMode = PictureEffects.anime4kMode(),
                 comparing = PictureEffects.comparing(),
                 onAnime4kToggled = { enabled ->
-                    PlaybackSettingsState.anime4kEnabled = enabled
-                    PictureEffects.setAnime4kSessionDisabled(!enabled)
+                    // 面板开关只作用于本次播放，不落库：旧实现会把它写成全局
+                    // ANIME4K_ENABLED，点一次就把「自动开启上限」永久废掉。
+                    PictureEffects.setAnime4kSessionEnabled(enabled)
                     restartForPictureIfNeeded()
                     refreshParamsSheet()
                 },

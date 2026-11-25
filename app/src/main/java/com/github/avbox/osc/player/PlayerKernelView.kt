@@ -247,7 +247,7 @@ class PlayerKernelView : BasePlayerView, DrawHandler.Callback {
         val scale = Anime4kAutoPolicy.outputScale(
             videoWidth,
             videoHeight,
-            Anime4kSettings.enabled(),
+            Anime4kSettings.manualActive(),
             Anime4kSettings.autoEnabled(),
             Anime4kSettings.autoMaxWidth(),
         )

@@ -30,7 +30,6 @@ data class PlaybackSettingsConfig(
     val exoCacheSizeMb: Int,
     val preloadNextEpisode: Boolean,
     val preloadDuration: Int,
-    val anime4kEnabled: Boolean,
     val anime4kDeblur: Boolean,
     val subtitleTextStyle: Int,
 )
@@ -62,7 +61,6 @@ object PlaybackSettingsState {
         exoCacheSizeMb = KV.get(KVKeys.EXO_CACHE_SIZE_MB, KVKeys.EXO_CACHE_SIZE_MB_DEFAULT),
         preloadNextEpisode = KV.get(KVKeys.PRELOAD_NEXT_EPISODE, false),
         preloadDuration = KV.get(KVKeys.PRELOAD_DURATION, KVKeys.PRELOAD_DURATION_DEFAULT),
-        anime4kEnabled = KV.get(KVKeys.ANIME4K_ENABLED, false),
         anime4kDeblur = KV.get(KVKeys.ANIME4K_DEBLUR, false),
         subtitleTextStyle = KV.get(KVKeys.SUBTITLE_TEXT_STYLE, 0),
     )
@@ -205,13 +203,6 @@ object PlaybackSettingsState {
         set(value) {
             KV.put(KVKeys.PRELOAD_DURATION, value)
             current = current.copy(preloadDuration = value)
-        }
-
-    var anime4kEnabled: Boolean
-        get() = current.anime4kEnabled
-        set(value) {
-            KV.put(KVKeys.ANIME4K_ENABLED, value)
-            current = current.copy(anime4kEnabled = value)
         }
 
     var anime4kDeblur: Boolean

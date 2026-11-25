@@ -117,7 +117,7 @@ internal object InfoOsdText {
 
     /** 播放信息里的「增强」行：状态 · 档位 · 模式 · 输出倍率。 */
     private fun enhancementText(context: Context, video: Format?): String {
-        val manual = Anime4kSettings.enabled()
+        val manual = Anime4kSettings.manualActive()
         val auto = Anime4kSettings.autoEnabled()
         val wanted = manual || auto
         val scale = if (video != null && video.width > 0 && video.height > 0) {
