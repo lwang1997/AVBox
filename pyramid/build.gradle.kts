@@ -56,6 +56,7 @@ chaquopy {
             install(file("wheels/jsonpath-0.54-py3-none-any.whl").absolutePath)
             install("cachetools")
             install("pycryptodome")
+            install("cryptography==42.0.8")
             install("beautifulsoup4")
         }
     }
