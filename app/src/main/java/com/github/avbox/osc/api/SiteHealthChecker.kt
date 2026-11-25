@@ -11,6 +11,7 @@ import com.github.catvod.crawler.SpiderNull
 import com.github.catvod.crawler.SpiderReaper
 import com.google.gson.GsonBuilder
 import com.google.gson.JsonDeserializer
+import com.google.gson.JsonParser
 import com.google.gson.reflect.TypeToken
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -140,13 +141,19 @@ object SiteHealthChecker {
     }
 
     /** 包住一次 spider 调用，用真实结果更新站点状态；不改变原有异常语义。 */
-    fun <T> track(key: String?, spider: Spider?, emptyIsBad: Boolean = true, block: () -> T): T {
+    fun <T> track(
+        key: String?,
+        spider: Spider?,
+        emptyIsBad: Boolean = true,
+        authoritative: Boolean = false,
+        block: () -> T,
+    ): T {
         if (key.isNullOrEmpty()) return SpiderReaper.track(spider, block)
         noteUse()
         val start = System.nanoTime()
         return try {
             val value = SpiderReaper.track(spider, block)
-            record(key, !emptyIsBad || !isBlank(value), elapsed(start), SiteHealth.VIA_USE)
+            record(key, !emptyIsBad || !isBlank(value), elapsed(start), SiteHealth.VIA_USE, authoritative)
             value
         } catch (e: CancellationException) {
             // 用户取消（例如取消搜索）不代表站点异常
@@ -157,14 +164,25 @@ object SiteHealthChecker {
         }
     }
 
-    /** 包住一次挂起调用（HTTP 类站点），语义同 [track]。 */
-    suspend fun <T> observe(key: String?, emptyIsBad: Boolean = true, block: suspend () -> T): T {
+    /**
+     * 包住一次挂起调用（HTTP 类站点），语义同 [track]。
+     * [validate] 用于判定业务结果是否有效：默认非空即可，分类加载等场景可传入更严格的条件
+     * （例如必须解析出有效分类），避免「接口通了但分类是空的」被误判为良好。
+     */
+    suspend fun <T> observe(
+        key: String?,
+        emptyIsBad: Boolean = true,
+        validate: (T) -> Boolean = { !isBlank(it) },
+        authoritative: Boolean = false,
+        block: suspend () -> T,
+    ): T {
         if (key.isNullOrEmpty()) return block()
         noteUse()
         val start = System.nanoTime()
         return try {
             val value = block()
-            record(key, !emptyIsBad || !isBlank(value), elapsed(start), SiteHealth.VIA_USE)
+            val ok = if (emptyIsBad) validate(value) else true
+            record(key, ok, elapsed(start), SiteHealth.VIA_USE, authoritative)
             value
         } catch (e: CancellationException) {
             throw e
@@ -186,7 +204,10 @@ object SiteHealthChecker {
             latencyMs <= GOOD_MAX_MS -> SiteHealth.State.GOOD
             else -> SiteHealth.State.SLOW
         }
-        if (state == SiteHealth.State.GOOD && _results.value[key]?.state == SiteHealth.State.BAD) return
+        // 分类是硬指标：接口已判异常/偏慢（含空分类）的站点，不因一次播放成功被洗回良好。
+        val current = _results.value[key]?.state
+        if (state == SiteHealth.State.GOOD &&
+            (current == SiteHealth.State.BAD || current == SiteHealth.State.SLOW)) return
         recordState(key, state, latencyMs.coerceAtLeast(0L), SiteHealth.VIA_PLAY)
     }
 
@@ -253,20 +274,24 @@ object SiteHealthChecker {
     private fun probe(bean: SourceBean) {
         val key = bean.key ?: return
         val gen = generation.get()
-        val task: Future<ProbeResult> = probeExecutor.submit(Callable {
+        val task: Future<ProbeResult?> = probeExecutor.submit(Callable {
             val start = System.nanoTime()
             val spider = ApiConfig.get().getCSP(bean)
             if (spider is SpiderNull) {
-                ProbeResult(false, elapsed(start))
+                // HTTP 类站点（type 0/1/4）没有 spider，不能用 homeContent 判定，
+                // 否则会被误判为失败；这类站点交给真实使用时的采样即可。
+                null
             } else {
-                // 与真实首页加载保持一致（SortLoader 使用 homeContent(true)）
+                // 与真实首页加载保持一致：分类是硬指标，必须解析出有效分类才算可用
                 val body = SpiderReaper.track(spider) { spider.homeContent(true) }
-                ProbeResult(!isBlank(body), elapsed(start))
+                ProbeResult(hasClasses(body), elapsed(start))
             }
         })
         try {
             val result = task.get(PROBE_TIMEOUT_MS, TimeUnit.MILLISECONDS)
-            if (gen == generation.get()) record(key, result.ok, result.latencyMs, SiteHealth.VIA_IDLE)
+            if (result != null && gen == generation.get()) {
+                record(key, result.ok, result.latencyMs, SiteHealth.VIA_IDLE, authoritative = true)
+            }
         } catch (e: TimeoutException) {
             task.cancel(true)
             if (gen == generation.get()) record(key, false, PROBE_TIMEOUT_MS, SiteHealth.VIA_IDLE)
@@ -279,7 +304,17 @@ object SiteHealthChecker {
 
     private data class ProbeResult(val ok: Boolean, val latencyMs: Long)
 
-    private fun record(key: String, ok: Boolean, latencyMs: Long, via: String) {
+    /**
+     * [authoritative] 表示这次采样的是站点硬指标（首页分类 / 闲时补查）。
+     * 只有权威来源能把已被判异常的站点恢复为良好；搜索、详情等旁路成功不得洗白。
+     */
+    private fun record(
+        key: String,
+        ok: Boolean,
+        latencyMs: Long,
+        via: String,
+        authoritative: Boolean = false,
+    ) {
         if (!ok) {
             val fails = (failCounts[key] ?: 0) + 1
             failCounts[key] = fails
@@ -292,8 +327,13 @@ object SiteHealthChecker {
             )
         } else {
             failCounts[key] = 0
-            // 响应慢只降偏慢，不再判异常
-            recordState(key, if (latencyMs <= GOOD_MAX_MS) SiteHealth.State.GOOD else SiteHealth.State.SLOW, latencyMs, via)
+            val current = _results.value[key]?.state
+            val state = when {
+                latencyMs > GOOD_MAX_MS -> SiteHealth.State.SLOW
+                !authoritative && (current == SiteHealth.State.BAD || current == SiteHealth.State.SLOW) -> SiteHealth.State.SLOW
+                else -> SiteHealth.State.GOOD
+            }
+            recordState(key, state, latencyMs, via)
         }
     }
 
@@ -304,6 +344,23 @@ object SiteHealthChecker {
         _results.value = next
         KV.put(KVKeys.SITE_HEALTH_RESULTS, gson.toJson(next))
         KV.put(KVKeys.SITE_HEALTH_CHECKED_AT, now)
+    }
+
+    /**
+     * 分类是站点的硬指标：接口返回非空但解析不出有效分类（class 里含 type_id/type_name）
+     * 时同样视为失败。与 SourceResultParser.sortJson 对分类的判定保持一致。
+     */
+    private fun hasClasses(body: String?): Boolean {
+        if (body.isNullOrBlank()) return false
+        return try {
+            val obj = JsonParser.parseString(body).asJsonObject
+            val arr = obj.getAsJsonArray("class") ?: return false
+            arr.any { el ->
+                el.isJsonObject && el.asJsonObject.let { it.has("type_id") && it.has("type_name") }
+            }
+        } catch (t: Throwable) {
+            false
+        }
     }
 
     private fun isBlank(value: Any?): Boolean {

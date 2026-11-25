@@ -37,8 +37,16 @@ object SourceHelper {
     @JvmField
     val PREPARE_POOL: ExecutorService = Executors.newFixedThreadPool(3)
 
-    suspend fun siteGet(sourceBean: SourceBean, init: HttpRequest.() -> Unit = {}): String {
-        return SiteHealthChecker.observe(sourceBean.key) {
+    /**
+     * [trackHealth] 为 false 时不在网络层定论，留给调用方按业务结果（例如分类是否解析成功）
+     * 自行判定，避免接口通了但内容为空仍被记为良好。
+     */
+    suspend fun siteGet(
+        sourceBean: SourceBean,
+        trackHealth: Boolean = true,
+        init: HttpRequest.() -> Unit = {},
+    ): String {
+        val request: suspend () -> String = {
             Http.get(requireNotNull(sourceBean.api) { "source api missing" }) {
                 for ((key, value) in sourceBean.header.orEmpty()) {
                     headers(key, value)
@@ -46,6 +54,7 @@ object SourceHelper {
                 init()
             }
         }
+        return if (trackHealth) SiteHealthChecker.observe(sourceBean.key) { request() } else request()
     }
 
     @JvmStatic

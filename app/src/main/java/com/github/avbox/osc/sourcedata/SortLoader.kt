@@ -140,21 +140,24 @@ class SortLoader(
     }
 
     private suspend fun sortFromSpider(sourceKey: String, sourceBean: SourceBean, withRec: Boolean) {
-        val sortJson = SiteHealthChecker.observe(sourceKey) {
+        // 分类是硬指标：接口通了但解析不出有效分类（sortList 为空）同样算失败。
+        // 把请求与解析一起采样，避免空分类被记为良好。
+        val (sortJson, sortXml) = SiteHealthChecker.observe(
+            sourceKey,
+            authoritative = true,
+            validate = { pair: Pair<String?, AbsSortXml?> ->
+                pair.second?.classes?.sortList?.isNotEmpty() == true
+            },
+        ) {
             withContext(Dispatchers.IO) {
-                BoundedCall.call(Callable<String> {
+                val json = BoundedCall.call(Callable<String> {
                     val sp = ApiConfig.get().getCSP(sourceBean)
-                    val json = SpiderReaper.track(sp) { sp.homeContent(true) }
-                    json
+                    SpiderReaper.track(sp) { sp.homeContent(true) }
                 }, sourceBean.playTimeoutSeconds() * 1000L, "echo--getSort--" + sourceBean.key)
+                val xml = if (json == null) null else resultParser.sortJson(sortResult, json)
+                Pair(json, xml)
             }
         }
-        if (sortJson == null) {
-            AppLog.i("echo--getSort-spider-null:$sourceKey")
-            postSortFailure(sourceKey)
-            return
-        }
-        val sortXml = withContext(Dispatchers.IO) { resultParser.sortJson(sortResult, sortJson) }
         attachSortSource(sourceKey, sortXml)
         if (sortXml == null) {
             postSortFailure(sourceKey)
@@ -181,14 +184,20 @@ class SortLoader(
     private suspend fun sortFromApi(sourceKey: String, sourceBean: SourceBean, withRec: Boolean) {
         val type = sourceBean.type
         try {
-            val body = SourceHelper.siteGet(sourceBean) {}
-            val sortXml: AbsSortXml? = withContext(Dispatchers.IO) {
-                if (type == 0) {
-                    resultParser.sortXml(sortResult, body)
-                } else if (type == 1) {
-                    resultParser.sortJson(sortResult, body)
-                } else {
-                    null
+            val sortXml: AbsSortXml? = SiteHealthChecker.observe(
+                sourceKey,
+                authoritative = true,
+                validate = { xml: AbsSortXml? -> xml?.classes?.sortList?.isNotEmpty() == true },
+            ) {
+                val body = SourceHelper.siteGet(sourceBean, trackHealth = false) {}
+                withContext(Dispatchers.IO) {
+                    if (type == 0) {
+                        resultParser.sortXml(sortResult, body)
+                    } else if (type == 1) {
+                        resultParser.sortJson(sortResult, body)
+                    } else {
+                        null
+                    }
                 }
             }
             attachSortSource(sourceKey, sortXml)
@@ -227,13 +236,21 @@ class SortLoader(
         }
         if (URLEncoder.encode(extend).length < 1000) {
             try {
-                val body = SourceHelper.siteGet(sourceBean) {
-                    params("filter", "true")
-                    if (extend != null && extend.isNotEmpty()) {
-                        params("extend", extend)
+                val (body, sortXml) = SiteHealthChecker.observe(
+                    sourceKey,
+                    authoritative = true,
+                    validate = { pair: Pair<String, AbsSortXml?> ->
+                        pair.second?.classes?.sortList?.isNotEmpty() == true
+                    },
+                ) {
+                    val body = SourceHelper.siteGet(sourceBean, trackHealth = false) {
+                        params("filter", "true")
+                        if (extend != null && extend.isNotEmpty()) {
+                            params("extend", extend)
+                        }
                     }
+                    Pair(body, withContext(Dispatchers.IO) { resultParser.sortJson(sortResult, body) })
                 }
-                val sortXml = withContext(Dispatchers.IO) { resultParser.sortJson(sortResult, body) }
                 attachSortSource(sourceKey, sortXml)
                 if (sortXml == null) {
                     postSortFailure(sourceKey)
@@ -264,30 +281,39 @@ class SortLoader(
                 if (extend != null && !extend.isEmpty()) {
                     params["extend"] = extend
                 }
-                val sortJson = suspendCancellableCoroutine<String?> { cont ->
-                    RemoteTVBox.post(sourceBean.api, params, sourceBean.header, object : okhttp3.Callback {
-                        override fun onFailure(call: Call, e: IOException) {
-                            AppLog.i("echo--getSort-post-fail:" + sourceKey + " ex=" + e)
-                            cont.resume(null)
-                        }
-
-                        override fun onResponse(call: Call, response: okhttp3.Response) {
-                            val body = try {
-                                response.use { it.body.string() }
-                            } catch (e: IOException) {
+                val (sortJson, sortXml) = SiteHealthChecker.observe(
+                    sourceKey,
+                    authoritative = true,
+                    validate = { pair: Pair<String?, AbsSortXml?> ->
+                        pair.second?.classes?.sortList?.isNotEmpty() == true
+                    },
+                ) {
+                    val json = suspendCancellableCoroutine<String?> { cont ->
+                        RemoteTVBox.post(sourceBean.api, params, sourceBean.header, object : okhttp3.Callback {
+                            override fun onFailure(call: Call, e: IOException) {
                                 AppLog.i("echo--getSort-post-fail:" + sourceKey + " ex=" + e)
-                                cont.resumeWithException(e)
-                                return
+                                cont.resume(null)
                             }
-                            cont.resume(body)
-                        }
-                    })
+
+                            override fun onResponse(call: Call, response: okhttp3.Response) {
+                                val body = try {
+                                    response.use { it.body.string() }
+                                } catch (e: IOException) {
+                                    AppLog.i("echo--getSort-post-fail:" + sourceKey + " ex=" + e)
+                                    cont.resumeWithException(e)
+                                    return
+                                }
+                                cont.resume(body)
+                            }
+                        })
+                    }
+                    val xml = if (json == null) null else withContext(Dispatchers.IO) { resultParser.sortJson(sortResult, json) }
+                    Pair(json, xml)
                 }
                 if (sortJson == null) {
                     postSortFailure(sourceKey)
                     return
                 }
-                val sortXml = withContext(Dispatchers.IO) { resultParser.sortJson(sortResult, sortJson) }
                 attachSortSource(sourceKey, sortXml)
                 if (sortXml == null) {
                     postSortFailure(sourceKey)
