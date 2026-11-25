@@ -208,10 +208,21 @@ object PictureEffects {
         if (enabled) player.applyVideoEffects(effectsFor(manual, auto))
     }
 
+    /**
+     * 内核释放：只解绑引用，**不重置本次播放的会话状态**（[contentKey] / [sessionLoaded] /
+     * `Anime4kStatus.sessionForced` 等）。
+     *
+     * 画面参数、渲染方式、解码方式变更走的都是「释放内核 + 同地址重播」
+     * （`releaseKernel` → `ExoPlayer.release()` → 新建内核 → `setDataSource` 同一 URL），
+     * 内容没变却会经过这里。旧实现在这里把 contentKey 清空，重建后的
+     * `onContentReplaced(同 URL)` 便当成换片 → `Anime4kStatus.resetSession()`，
+     * 面板「本次播放」开关和本次模式当场被打回默认；而 1080p 这类高于
+     * `ANIME4K_AUTO_MAX_WIDTH` 的片又必须靠这次重建才能把 manualEnabled 带进链路，
+     * 于是点「开启」后链路仍是纯拷贝（真机日志：rebuild 后 `tier=off passes=0`）。
+     * 换片仍由 [onContentReplaced] 按 URL 变化判定重置。
+     */
     fun onPlayerReleased(player: PictureEffectHost) {
         if (current?.get() === player) current = null
-        contentKey = null
-        sessionLoaded = false
     }
 
     fun anime4kUnavailable(): Boolean {
