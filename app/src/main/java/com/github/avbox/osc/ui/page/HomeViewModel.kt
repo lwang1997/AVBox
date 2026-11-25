@@ -5,12 +5,14 @@ import androidx.lifecycle.viewModelScope
 import com.github.avbox.osc.R
 import com.github.avbox.osc.api.AppBootstrap
 import com.github.avbox.osc.api.ApiConfig
+import com.github.avbox.osc.api.SiteHealthChecker
 import com.github.avbox.osc.api.SortAdjuster
 import com.github.avbox.osc.api.TmdbPoster
 import com.github.avbox.osc.bean.AbsSortXml
 import com.github.avbox.osc.bean.AbsXml
 import com.github.avbox.osc.bean.Movie
 import com.github.avbox.osc.bean.MovieSort
+import com.github.avbox.osc.bean.SiteHealth
 import com.github.avbox.osc.bean.SourceBean
 import com.github.avbox.osc.bean.TmdbPosterCache
 import com.github.avbox.osc.sourcedata.SourceRuntimeState
@@ -89,6 +91,8 @@ class HomeViewModel : ViewModel(), TmdbPosterCache {
     val currentSource = _currentSource.asStateFlow()
     private val _sources = MutableStateFlow<List<SourceBean>>(emptyList())
     val sources = _sources.asStateFlow()
+    // 站点状态由 api 层的真实使用埋点与闲时补查产生，VM 只读投影
+    val sourceHealth: StateFlow<Map<String, SiteHealth>> get() = SiteHealthChecker.results
     private val _subscribeItems = MutableStateFlow<List<SubscribeSource>>(emptyList())
     val subscribeItems = _subscribeItems.asStateFlow()
     private val _activeSubscribeIndex = MutableStateFlow(-1)
@@ -212,11 +216,13 @@ class HomeViewModel : ViewModel(), TmdbPosterCache {
     fun reload() {
         AppLog.i("echo--sort-reload")
         SourceRuntimeState.clearRuntimeCache()
+        SiteHealthChecker.bumpGeneration()
         loadHome()
     }
 
     fun switchSource(bean: SourceBean) {
         AppLog.i("echo--sort-switch: key=${bean.key}")
+        SiteHealthChecker.ensureFresh(bean)
         ApiConfig.get().setSourceBean(bean)
         _currentSource.value = bean
         loadHome()

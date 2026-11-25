@@ -4,6 +4,7 @@ import android.text.TextUtils
 
 import com.github.catvod.net.OkHttp
 import com.github.avbox.osc.api.ApiConfig
+import com.github.avbox.osc.api.SiteHealthChecker
 import com.github.avbox.osc.bean.AbsXml
 import com.github.avbox.osc.bean.Movie
 import com.github.avbox.osc.bean.SourceBean
@@ -37,11 +38,13 @@ object SourceHelper {
     val PREPARE_POOL: ExecutorService = Executors.newFixedThreadPool(3)
 
     suspend fun siteGet(sourceBean: SourceBean, init: HttpRequest.() -> Unit = {}): String {
-        return Http.get(requireNotNull(sourceBean.api) { "source api missing" }) {
-            for ((key, value) in sourceBean.header.orEmpty()) {
-                headers(key, value)
+        return SiteHealthChecker.observe(sourceBean.key) {
+            Http.get(requireNotNull(sourceBean.api) { "source api missing" }) {
+                for ((key, value) in sourceBean.header.orEmpty()) {
+                    headers(key, value)
+                }
+                init()
             }
-            init()
         }
     }
 

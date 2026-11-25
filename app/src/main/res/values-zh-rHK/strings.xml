@@ -93,4 +93,7 @@
 
     <string name="settings_sync_title">多端同步</string>
     <string name="settings_sync_subtitle">透過 WebDAV 同步觀看資料</string>
+    <string name="site_health_ok">良好</string>
+    <string name="site_health_warn">偏慢</string>
+    <string name="site_health_bad">異常</string>
 </resources>

@@ -67,6 +67,7 @@ object AppBootstrap {
         if (started) return
         started = true
         installServerPorts()
+        SiteHealthChecker.onAppLaunch()
         val generation = bootGeneration.next()
         scope.launch {
             Probe.trace("boot:bootstrapRepair") { FileUtils.repairBogusNativeLibs() }

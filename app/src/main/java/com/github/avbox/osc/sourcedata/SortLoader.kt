@@ -2,6 +2,7 @@ package com.github.avbox.osc.sourcedata
 
 import com.github.catvod.crawler.SpiderReaper
 import com.github.avbox.osc.api.ApiConfig
+import com.github.avbox.osc.api.SiteHealthChecker
 import com.github.avbox.osc.bean.AbsSortXml
 import com.github.avbox.osc.bean.Movie
 import com.github.avbox.osc.bean.SourceBean
@@ -139,12 +140,14 @@ class SortLoader(
     }
 
     private suspend fun sortFromSpider(sourceKey: String, sourceBean: SourceBean, withRec: Boolean) {
-        val sortJson = withContext(Dispatchers.IO) {
-            BoundedCall.call(Callable<String> {
-                val sp = ApiConfig.get().getCSP(sourceBean)
-                val json = SpiderReaper.track(sp) { sp.homeContent(true) }
-                json
-            }, sourceBean.playTimeoutSeconds() * 1000L, "echo--getSort--" + sourceBean.key)
+        val sortJson = SiteHealthChecker.observe(sourceKey) {
+            withContext(Dispatchers.IO) {
+                BoundedCall.call(Callable<String> {
+                    val sp = ApiConfig.get().getCSP(sourceBean)
+                    val json = SpiderReaper.track(sp) { sp.homeContent(true) }
+                    json
+                }, sourceBean.playTimeoutSeconds() * 1000L, "echo--getSort--" + sourceBean.key)
+            }
         }
         if (sortJson == null) {
             AppLog.i("echo--getSort-spider-null:$sourceKey")

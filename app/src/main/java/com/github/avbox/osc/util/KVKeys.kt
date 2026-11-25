@@ -161,4 +161,9 @@ object KVKeys {
 
     // 追剧 TMDB 更新信息自动刷新
     const val FOLLOW_TMDB_LAST_REFRESH_AT = "follow_tmdb_last_refresh_at"
+
+    // 站点健康状态：真实使用/闲时补查的结果与最近更新时间
+    const val SITE_HEALTH_RESULTS = "site_health_results"
+    const val SITE_HEALTH_CHECKED_AT = "site_health_checked_at"
+    const val SITE_HEALTH_IDLE_LAST_AT = "site_health_idle_last_at"
 }

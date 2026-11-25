@@ -4,6 +4,7 @@ import android.text.TextUtils
 import android.util.Base64
 import com.github.catvod.crawler.SpiderReaper
 import com.github.avbox.osc.api.ApiConfig
+import com.github.avbox.osc.api.SiteHealthChecker
 import com.github.avbox.osc.bean.AbsXml
 import com.github.avbox.osc.bean.Movie
 import com.github.avbox.osc.bean.MovieSort
@@ -53,11 +54,13 @@ class ListLoader(
     }
 
     private suspend fun listFromSpider(sourceBean: SourceBean, sortData: MovieSort.SortData, page: Int) {
-        val json = withContext(Dispatchers.IO) {
-            BoundedCall.call(Callable<String> {
-                val sp = ApiConfig.get().getCSP(sourceBean)
-                SpiderReaper.track(sp) { sp.categoryContent(sortData.id, page.toString(), true, sortData.filterSelect) }
-            }, sourceBean.playTimeoutSeconds() * 1000L, "echo--getList--" + sourceBean.key)
+        val json = SiteHealthChecker.observe(sourceBean.key) {
+            withContext(Dispatchers.IO) {
+                BoundedCall.call(Callable<String> {
+                    val sp = ApiConfig.get().getCSP(sourceBean)
+                    SpiderReaper.track(sp) { sp.categoryContent(sortData.id, page.toString(), true, sortData.filterSelect) }
+                }, sourceBean.playTimeoutSeconds() * 1000L, "echo--getList--" + sourceBean.key)
+            }
         }
         if (json != null) {
             withContext(Dispatchers.IO) { resultParser.json(listResult, json, sourceBean.key) }
@@ -143,11 +146,13 @@ class ListLoader(
     suspend fun homeRecList(sourceBean: SourceBean, ids: ArrayList<String?>?): MutableList<Movie.Video>? {
         val type = sourceBean.type
         if (type == 3) {
-            val sortJson = withContext(Dispatchers.IO) {
-                BoundedCall.call(Callable<String> {
-                    val sp = ApiConfig.get().getCSP(sourceBean)
-                    SpiderReaper.track(sp) { sp.homeVideoContent() }
-                }, sourceBean.playTimeoutSeconds() * 1000L, "echo--homeRecList--" + sourceBean.key)
+            val sortJson = SiteHealthChecker.observe(sourceBean.key) {
+                withContext(Dispatchers.IO) {
+                    BoundedCall.call(Callable<String> {
+                        val sp = ApiConfig.get().getCSP(sourceBean)
+                        SpiderReaper.track(sp) { sp.homeVideoContent() }
+                    }, sourceBean.playTimeoutSeconds() * 1000L, "echo--homeRecList--" + sourceBean.key)
+                }
             }
             if (sortJson == null) return null
             return withContext(Dispatchers.IO) { resultParser.json(null, sortJson, sourceBean.key)?.movie?.videoList }

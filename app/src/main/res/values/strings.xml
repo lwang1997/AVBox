@@ -758,4 +758,7 @@
     <string name="toast_settings_uploaded">设置已上传</string>
     <string name="toast_settings_downloaded">设置已下载</string>
     <string name="toast_settings_none_remote">服务器暂无设置</string>
+    <string name="site_health_ok">良好</string>
+    <string name="site_health_warn">偏慢</string>
+    <string name="site_health_bad">异常</string>
 </resources>

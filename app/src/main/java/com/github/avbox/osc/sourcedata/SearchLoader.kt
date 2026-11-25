@@ -1,8 +1,8 @@
 package com.github.avbox.osc.sourcedata
 
 import android.text.TextUtils
-import com.github.catvod.crawler.SpiderReaper
 import com.github.avbox.osc.api.ApiConfig
+import com.github.avbox.osc.api.SiteHealthChecker
 import com.github.avbox.osc.bean.AbsXml
 import com.github.avbox.osc.bean.SourceBean
 import com.github.avbox.osc.util.AppLog
@@ -51,7 +51,10 @@ class SearchLoader(
         try {
             val search = withContext(Dispatchers.IO) {
                 val spider = ApiConfig.get().getCSP(sourceBean)
-                SpiderReaper.track(spider) { spider.searchContent(wd, false) }
+                // 搜索无结果是正常情况，只有异常/超时才记为异常
+                SiteHealthChecker.track(sourceBean.key, spider, emptyIsBad = false) {
+                    spider.searchContent(wd, false)
+                }
             }
             withContext(Dispatchers.IO) {
                 if (!TextUtils.isEmpty(search)) {

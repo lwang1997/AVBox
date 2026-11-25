@@ -1,9 +1,11 @@
 package com.github.avbox.osc.player
 
 import android.os.Looper
+import android.os.SystemClock
 import android.text.TextUtils
 import com.github.avbox.osc.R
 import com.github.avbox.osc.api.ApiConfig
+import com.github.avbox.osc.api.SiteHealthChecker
 import com.github.avbox.osc.base.App
 import com.github.avbox.osc.bean.ParseBean
 import com.github.avbox.osc.bean.SourceBean
@@ -44,6 +46,11 @@ class PlaybackController {
     private var playerCfg: JSONObject? = null
     private var sourceKey: String = ""
     private var sourceBean: SourceBean? = null
+
+    // 播放侧健康采样：每个会话最多记一次成功、一次失败，失败可覆盖先前的成功
+    private var healthStartAtMs = 0L
+    private var healthPlayOkDone = false
+    private var healthPlayFailed = false
 
     data class PlaybackSelection(val flag: String?, val index: Int)
 
@@ -109,6 +116,9 @@ class PlaybackController {
         _quality.value = null
         sourceKey = session.sourceKey()
         sourceBean = ApiConfig.get().getSource(sourceKey)
+        healthStartAtMs = SystemClock.elapsedRealtime()
+        healthPlayOkDone = false
+        healthPlayFailed = false
         ApiConfig.get().setCurrentPlaySourceKey(sourceKey)
         initPlayerCfg()
         _persistedPlayerCfg.value = vod?.playerCfg
@@ -620,10 +630,27 @@ class PlaybackController {
         return state == PlayState.PREPARED || state == PlayState.BUFFERED || state == PlayState.PLAYING
     }
 
+    /** 起播成功：计入会话开始到首次出画的耗时，超过阈值由健康引擎降为偏慢。 */
+    private fun reportPlaybackOk() {
+        if (healthPlayOkDone || healthPlayFailed || healthStartAtMs <= 0L) return
+        healthPlayOkDone = true
+        val elapsed = (SystemClock.elapsedRealtime() - healthStartAtMs).coerceAtLeast(0L)
+        SiteHealthChecker.recordPlayback(sourceKey, true, elapsed)
+    }
+
+    /** 播放失败/超时：只降为偏慢，不把整站判为异常。 */
+    private fun reportPlaybackFail() {
+        if (healthPlayFailed || healthStartAtMs <= 0L) return
+        healthPlayFailed = true
+        val elapsed = (SystemClock.elapsedRealtime() - healthStartAtMs).coerceAtLeast(0L)
+        SiteHealthChecker.recordPlayback(sourceKey, false, elapsed)
+    }
+
     fun markPlaybackStarted() {
         st = st.copy(playbackStarted = true)
         SlowOpenSignal.disarm()
         WatchProgressStore.onPlayStart(progressKey())
+        reportPlaybackOk()
         cancelPlayTimeout()
     }
 
@@ -656,6 +683,7 @@ class PlaybackController {
     }
 
     private fun showTerminalError() {
+        reportPlaybackFail()
         val bridge = view ?: return
         if (!bridge.isPageAlive()) return
         bridge.showTip(terminalErrorText(str(R.string.player_error_play), playbackError = true), false, true)
@@ -800,14 +828,17 @@ class PlaybackController {
     }
 
     fun handleResolvePlayUrlTimeout() {
+        reportPlaybackFail()
         scope.launch { retry.handleResolvePlayUrlTimeout() }
     }
 
     fun handleResolvePlayUrlFailed(err: String) {
+        reportPlaybackFail()
         scope.launch { retry.handleResolvePlayUrlFailed(err) }
     }
 
     fun handleSwitchLinePlayTimeout() {
+        reportPlaybackFail()
         scope.launch { retry.handleSwitchLinePlayTimeout() }
     }
 

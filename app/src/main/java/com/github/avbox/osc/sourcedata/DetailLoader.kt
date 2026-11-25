@@ -3,6 +3,7 @@ package com.github.avbox.osc.sourcedata
 import android.util.Base64
 import com.github.catvod.crawler.SpiderReaper
 import com.github.avbox.osc.api.ApiConfig
+import com.github.avbox.osc.api.SiteHealthChecker
 import com.github.avbox.osc.bean.AbsXml
 import com.github.avbox.osc.bean.Movie
 import com.github.avbox.osc.bean.SourceBean
@@ -75,17 +76,19 @@ class DetailLoader(
 
     private suspend fun detailFromSpider(sourceBean: SourceBean, id: String, fallback: Boolean, requestToken: Int?) {
         withContext(Dispatchers.IO) {
-            val json = BoundedCall.call(Callable<String> {
-                val sp = ApiConfig.get().getCSP(sourceBean)
-                val ids = ArrayList<String>()
-                ids.add(id)
-                try {
-                    SpiderReaper.track(sp) { sp.detailContent(ids) }
-                } catch (e: Exception) {
-                    AppLog.i("echo--getDetail--error: " + e.message)
-                    ""
-                }
-            }, if (fallback) 6_000L else sourceBean.playTimeoutSeconds() * 1000L, "echo--getDetail--" + sourceBean.key)
+            val json = SiteHealthChecker.observe(sourceBean.key) {
+                BoundedCall.call(Callable<String> {
+                    val sp = ApiConfig.get().getCSP(sourceBean)
+                    val ids = ArrayList<String>()
+                    ids.add(id)
+                    try {
+                        SpiderReaper.track(sp) { sp.detailContent(ids) }
+                    } catch (e: Exception) {
+                        AppLog.i("echo--getDetail--error: " + e.message)
+                        ""
+                    }
+                }, if (fallback) 6_000L else sourceBean.playTimeoutSeconds() * 1000L, "echo--getDetail--" + sourceBean.key)
+            }
             val body = json.orEmpty()
             AppLog.i("echo-detail-body key=" + sourceBean.key + " id=" + id + " len=" + body.length
                     + " fallback=" + fallback + " head=" + body.take(200).replace('\n', ' '))

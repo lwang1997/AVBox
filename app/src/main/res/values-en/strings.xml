@@ -758,4 +758,7 @@
     <string name="toast_settings_uploaded">Settings uploaded</string>
     <string name="toast_settings_downloaded">Settings downloaded</string>
     <string name="toast_settings_none_remote">No settings on server</string>
+    <string name="site_health_ok">Good</string>
+    <string name="site_health_warn">Slow</string>
+    <string name="site_health_bad">Failed</string>
 </resources>
