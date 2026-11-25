@@ -77,7 +77,7 @@ import kotlinx.coroutines.launch
 
 private val EpisodeThumbWidth = 210.dp
 
-private val EpisodeGridMinCardWidth = 56.dp
+private val EpisodeGridCardWidth = 64.dp
 private const val EpisodeGridRowsPerPage = 3
 private val EpisodeGridChipHeight = 44.dp
 private val EpisodeGridSpacing = 8.dp
@@ -276,18 +276,11 @@ private fun CompactEpisodeGrid(
     ) {
         // 横向优先填满：列数按可用宽度自适应（手机约 5 列，平板更宽则更多），纵向最多 3 行
         val columns = ((maxWidth + EpisodeGridSpacing) /
-            (EpisodeGridMinCardWidth + EpisodeGridSpacing) + 0.01f)
+            (EpisodeGridCardWidth + EpisodeGridSpacing) + 0.01f)
             .toInt()
             .coerceAtLeast(1)
-        // 渲染全部集数，超出限高部分在区域内滚动翻页（不再只取前 15 集）
-        // 总集数不足一行时把卡片拉宽铺满整屏，避免一两个小按钮挤在角落
-        val perRow = minOf(columns, episodes.size)
-        // 多扣一个间距作余量：正好铺满时浮点误差会把末尾一张挤到下一行
-        val cardWidth = if (perRow == 1) {
-            maxWidth
-        } else {
-            (maxWidth - EpisodeGridSpacing * perRow) / perRow
-        }
+        // 卡片宽度固定，不满一行也不拉伸占满（占满宽度交给单列布局）
+        val cardWidth = EpisodeGridCardWidth
 
         val scrollState = rememberScrollState()
         val scrollConnection = rememberConfineEpisodeScroll(scrollState)
@@ -302,6 +295,7 @@ private fun CompactEpisodeGrid(
             }
         }
 
+        // 渲染全部集数，超出限高部分在区域内滚动翻页（不再只取前 15 集）
         FlowRow(
             modifier = Modifier
                 .heightIn(max = maxGridHeight)
