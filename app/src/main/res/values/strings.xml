@@ -181,7 +181,6 @@
     <string name="player_anime4k_deblur">去模糊</string>
     <string name="player_anime4k_mode_anime">动漫</string>
     <string name="player_anime4k_mode_real_movie">真人电影</string>
-    <string name="player_anime4k_session_hint">开关只对当前视频生效，换片后按「低分辨率自动开启」重新判断</string>
     <string name="player_picture_preset_natural">自然</string>
     <string name="player_picture_preset_vivid">艳丽</string>
     <string name="player_picture_preset_clear">清晰</string>

@@ -87,16 +87,6 @@ internal fun PictureParams(state: PictureParamsState) {
                 )
             }
         }
-        Spacer(Modifier.height(playerDim(R.dimen.vs_10)))
-        // 开关是「本次播放」语义：不写全局总开关，避免用户以为点一下就永久生效、
-        // 结果把所有分辨率都强行增强（自动上限看起来失效）。
-        Text(
-            text = stringResource(R.string.player_anime4k_session_hint),
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            fontSize = playerTextSize(R.dimen.ts_18),
-            textAlign = TextAlign.Center,
-            modifier = Modifier.fillMaxWidth(),
-        )
         if (state.anime4kEnabled) {
             Spacer(Modifier.height(playerDim(R.dimen.vs_10)))
             Row(
