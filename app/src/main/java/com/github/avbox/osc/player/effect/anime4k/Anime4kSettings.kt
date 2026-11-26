@@ -177,6 +177,24 @@ object Anime4kStatus {
     @Volatile
     var sessionForced = false
 
+    /**
+     * 面板改了「本次播放」开关 / 档位 / 模式 / 去模糊：由链在下一帧按当前设置自建，
+     * **不重建内核**。重建内核要重新请求一次数据源（直链 m3u8 带时效 token，
+     * 过期后整段播放失败），所以这类纯着色器参数只能热更新。
+     */
+    @Volatile
+    private var chainSyncRequested = false
+
+    fun requestChainSync() {
+        chainSyncRequested = true
+    }
+
+    fun takeChainSync(): Boolean {
+        if (!chainSyncRequested) return false
+        chainSyncRequested = false
+        return true
+    }
+
     fun unavailable(): Boolean = failed
 
     fun onBuildSucceeded() {
@@ -196,6 +214,7 @@ object Anime4kStatus {
         failed = false
         autoActive = false
         tierActive = false
+        chainSyncRequested = false
     }
 
     fun resetSession() {

@@ -22,10 +22,15 @@ internal class Anime4kChainProgram(
     private var copyProgram: GlProgram? = null
     private var splitProgram: GlProgram? = null
     private var splitTarget: Target? = null
+    private var inputWidth = 0
+    private var inputHeight = 0
     private var outputWidth = 0
     private var outputHeight = 0
     private var effectiveTier: Anime4kTier? = null
     private var failed = hdrEnabled
+    private var builtTier: Anime4kTier? = null
+    private var builtMode: Anime4kMode = Anime4kMode.default
+    private var builtDeblur = false
     private var firstFrameLogged = false
     private var splitLogged = false
 
@@ -33,18 +38,20 @@ internal class Anime4kChainProgram(
         releaseGl()
         firstFrameLogged = false
         splitLogged = false
+        this.inputWidth = inputWidth
+        this.inputHeight = inputHeight
         outputWidth = inputWidth
         outputHeight = inputHeight
+        failed = hdrEnabled
+        builtTier = null
         val tier = resolveTier(inputWidth, inputHeight)
         effectiveTier = tier
-        failed = hdrEnabled || tier == null
-        Anime4kStatus.onChainResolved(
-            tierActive = tier != null,
-            autoActive = tier != null && !effect.manualEnabled,
-        )
         if (!failed && tier != null) {
             try {
-                build(tier, effect.mode, inputWidth, inputHeight)
+                build(tier, effect.mode, inputWidth, inputHeight, EffectCanvas.get())
+                builtTier = tier
+                builtMode = effect.mode
+                builtDeblur = Anime4kSettings.effectiveDeblur(effect.mode)
                 Anime4kStatus.onBuildSucceeded()
             } catch (e: Exception) {
                 failed = true
@@ -59,6 +66,10 @@ internal class Anime4kChainProgram(
                 )
             }
         }
+        Anime4kStatus.onChainResolved(
+            tierActive = !failed && tier != null,
+            autoActive = !failed && tier != null && !Anime4kSettings.manualActive(),
+        )
         return Size(outputWidth, outputHeight)
     }
 
@@ -70,9 +81,97 @@ internal class Anime4kChainProgram(
         return null
     }
 
+    /** 当前会话状态（面板开关 + 自动上限，均读实时值）下链是否应带档位。 */
+    private fun desiredTier(): Anime4kTier? {
+        val tier = effect.tier ?: return null
+        if (Anime4kStatus.sessionDisabled) return null
+        if (Anime4kSettings.manualActive()) return tier
+        val limit = effect.autoMaxWidth
+        return if (limit > 0 && max(inputWidth, inputHeight) <= limit) tier else null
+    }
+
+    private fun chainReady(): Boolean =
+        !failed && passes.isNotEmpty() && desiredTier() != null
+
+    /**
+     * 面板改「本次播放」开关 / 档位 / 模式 / 去模糊后就地重建链：
+     * 不重建内核、不重新请求数据源（直链 m3u8 过期会让整段播放失败）。
+     */
+    private fun syncChain() {
+        if (hdrEnabled || inputWidth <= 0 || inputHeight <= 0) return
+        val tier = desiredTier() ?: return
+        val mode = effect.mode
+        val deblur = Anime4kSettings.effectiveDeblur(mode)
+        if (!failed && passes.isNotEmpty() && tier == builtTier && mode == builtMode &&
+            deblur == builtDeblur
+        ) {
+            return
+        }
+        rebuild(tier, mode, deblur)
+    }
+
+    private fun rebuild(tier: Anime4kTier, mode: Anime4kMode, deblur: Boolean) {
+        releaseGl()
+        outputWidth = inputWidth
+        outputHeight = inputHeight
+        try {
+            build(tier, mode, inputWidth, inputHeight, liveCanvas())
+            failed = false
+            effectiveTier = tier
+            builtTier = tier
+            builtMode = mode
+            builtDeblur = deblur
+            Anime4kStatus.onBuildSucceeded()
+            Anime4kStatus.onChainResolved(
+                tierActive = true,
+                autoActive = !Anime4kSettings.manualActive(),
+            )
+        } catch (e: Exception) {
+            failed = true
+            passes.clear()
+            releaseTargets()
+            Anime4kStatus.onBuildFailed()
+            AppLog.e(
+                "Anime4kChain",
+                "echo-anime4k rebuild failed, fallback to passthrough: " +
+                    "${e.javaClass.simpleName}: ${e.message}",
+                e,
+            )
+        }
+    }
+
+    /** 热更新时的超分目标：等价于 App 按新的会话状态重推输出尺寸。 */
+    private fun liveCanvas(): IntArray {
+        val scale = Anime4kAutoPolicy.outputScale(
+            inputWidth,
+            inputHeight,
+            Anime4kSettings.manualActive(),
+            Anime4kSettings.autoEnabled(),
+            Anime4kSettings.autoMaxWidth(),
+        )
+        return intArrayOf(inputWidth * scale, inputHeight * scale)
+    }
+
     override fun drawFrame(inputTexId: Int, presentationTimeUs: Long) {
         try {
-            if (failed || Anime4kStatus.sessionDisabled) {
+            // 先记下 media3 绑好的输出 framebuffer / viewport：面板热更新会在 drawFrame 中间
+            // 重建链（createFramebuffer 会把绑定复位到 0），必须原样恢复，否则最后一趟
+            // 屏幕 pass 会画到默认 framebuffer 上、输出直接错位/黑屏。
+            val previousFramebuffer = IntArray(1)
+            val previousViewport = IntArray(4)
+            GLES20.glGetIntegerv(GLES20.GL_FRAMEBUFFER_BINDING, previousFramebuffer, 0)
+            GLES20.glGetIntegerv(GLES20.GL_VIEWPORT, previousViewport, 0)
+            if (Anime4kStatus.takeChainSync()) {
+                syncChain()
+                GLES20.glBindFramebuffer(GLES20.GL_FRAMEBUFFER, previousFramebuffer[0])
+                GLES20.glViewport(
+                    previousViewport[0],
+                    previousViewport[1],
+                    previousViewport[2],
+                    previousViewport[3],
+                )
+            }
+            if (!chainReady()) {
                 drawCopy(inputTexId)
                 logFirstFrame()
                 return
@@ -85,10 +184,6 @@ internal class Anime4kChainProgram(
                         " passes=${passes.size}",
                 )
             }
-            val previousFramebuffer = IntArray(1)
-            val previousViewport = IntArray(4)
-            GLES20.glGetIntegerv(GLES20.GL_FRAMEBUFFER_BINDING, previousFramebuffer, 0)
-            GLES20.glGetIntegerv(GLES20.GL_VIEWPORT, previousViewport, 0)
             passes.forEachIndexed { index, compiled ->
                 try {
                     if (compare && index == passes.lastIndex) {
@@ -154,12 +249,17 @@ internal class Anime4kChainProgram(
         releaseGl()
     }
 
-    private fun build(tier: Anime4kTier, mode: Anime4kMode, inputWidth: Int, inputHeight: Int) {
+    private fun build(
+        tier: Anime4kTier,
+        mode: Anime4kMode,
+        inputWidth: Int,
+        inputHeight: Int,
+        canvas: IntArray?,
+    ) {
         fun load(asset: String): List<Anime4kPass> = Anime4kShader.parse(
             context.assets.open(ANIME4K_ASSET_DIR + asset).bufferedReader().use { it.readText() },
         )
 
-        val canvas = EffectCanvas.get()
         val clamp = load(ANIME4K_CLAMP_HIGHLIGHTS)
         val restore = tier.restore(mode)?.let { load(it) }.orEmpty()
         val upscale = tier.upscale(mode)?.let { load(it) }.orEmpty()
@@ -221,7 +321,8 @@ internal class Anime4kChainProgram(
         firstFrameLogged = true
         AppLog.i(
             "echo-anime4k draw: tier=${effectiveTier?.name ?: "off"} passes=${passes.size}" +
-                " out=${outputWidth}x$outputHeight" + if (failed) " (passthrough)" else "",
+                " out=${outputWidth}x$outputHeight" +
+                if (failed || passes.isEmpty()) " (passthrough)" else "",
         )
     }
 

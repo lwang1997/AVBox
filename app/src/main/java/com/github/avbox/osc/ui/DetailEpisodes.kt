@@ -9,8 +9,6 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.ExperimentalLayoutApi
-import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
@@ -77,7 +75,11 @@ import kotlinx.coroutines.launch
 
 private val EpisodeThumbWidth = 210.dp
 
-private val EpisodeGridCardWidth = 64.dp
+/** 选集宫格单列最小宽度：只用来推导列数，实际卡片宽度按可用宽度均分填满。 */
+private val EpisodeGridMinCardWidth = 56.dp
+
+/** 手机宽度上限 5 列；平板 / 桌面不设上限，继续按可用宽度自适应。 */
+private const val EpisodeGridCompactMaxColumns = 5
 private const val EpisodeGridRowsPerPage = 3
 private val EpisodeGridChipHeight = 44.dp
 private val EpisodeGridSpacing = 8.dp
@@ -255,7 +257,6 @@ private fun ThumbnailEpisodeRow(
     }
 }
 
-@OptIn(ExperimentalLayoutApi::class)
 @Composable
 private fun CompactEpisodeGrid(
     episodes: List<VodInfo.VodSeries>,
@@ -274,13 +275,17 @@ private fun CompactEpisodeGrid(
             .fillMaxWidth()
             .padding(horizontal = 16.dp),
     ) {
-        // 横向优先填满：列数按可用宽度自适应（手机约 5 列，平板更宽则更多），纵向最多 3 行
+        // 横向优先填满：列数按可用宽度自适应，纵向最多 3 行。
+        // 手机（窗口 < 600dp）锁 5 列，避免 411dp 这类大屏手机碎成 6 列；平板 / 桌面按宽度继续增加列数。
+        val maxColumns = if (currentWindowWidthClass() == WindowWidthClass.Compact) {
+            EpisodeGridCompactMaxColumns
+        } else {
+            Int.MAX_VALUE
+        }
         val columns = ((maxWidth + EpisodeGridSpacing) /
-            (EpisodeGridCardWidth + EpisodeGridSpacing) + 0.01f)
+            (EpisodeGridMinCardWidth + EpisodeGridSpacing) + 0.01f)
             .toInt()
-            .coerceAtLeast(1)
-        // 卡片宽度固定，不满一行也不拉伸占满（占满宽度交给单列布局）
-        val cardWidth = EpisodeGridCardWidth
+            .coerceIn(1, maxColumns)
 
         val scrollState = rememberScrollState()
         val scrollConnection = rememberConfineEpisodeScroll(scrollState)
@@ -295,22 +300,33 @@ private fun CompactEpisodeGrid(
             }
         }
 
-        // 渲染全部集数，超出限高部分在区域内滚动翻页（不再只取前 15 集）
-        FlowRow(
+        // 渲染全部集数，超出限高部分在区域内滚动翻页（不再只取前 15 集）。
+        // 满行用 weight 等分铺满可用宽度（左右各 16dp 内边距，左右对称）；
+        // 末行不满时右侧补等宽空位，卡片宽度与首行一致，并保持与首行左对齐。
+        Column(
             modifier = Modifier
                 .heightIn(max = maxGridHeight)
                 .nestedScroll(scrollConnection)
                 .verticalScroll(scrollState),
-            horizontalArrangement = Arrangement.spacedBy(EpisodeGridSpacing),
             verticalArrangement = Arrangement.spacedBy(EpisodeGridSpacing),
         ) {
-            episodes.forEachIndexed { index, _ ->
-                EpisodeNumberCard(
-                    name = episodeLabels.getOrNull(index)?.takeIf { it.isNotEmpty() } ?: (index + 1).toString(),
-                    selected = index == playIndex,
-                    onClick = { onClick(index) },
-                    modifier = Modifier.width(cardWidth),
-                )
+            episodes.chunked(columns).forEachIndexed { rowIndex, rowItems ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(EpisodeGridSpacing),
+                ) {
+                    rowItems.forEachIndexed { colIndex, _ ->
+                        val index = rowIndex * columns + colIndex
+                        EpisodeNumberCard(
+                            name = episodeLabels.getOrNull(index)?.takeIf { it.isNotEmpty() }
+                                ?: (index + 1).toString(),
+                            selected = index == playIndex,
+                            onClick = { onClick(index) },
+                            modifier = Modifier.weight(1f),
+                        )
+                    }
+                    repeat(columns - rowItems.size) { Spacer(Modifier.weight(1f)) }
+                }
             }
         }
     }

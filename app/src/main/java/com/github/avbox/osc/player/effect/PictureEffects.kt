@@ -52,10 +52,6 @@ object PictureEffects {
     private var comparing = false
 
     private var anime4kOpened = false
-    private var anime4kForcedOpened = false
-    private var anime4kTierOpened: Anime4kTier = Anime4kTier.default
-    private var anime4kModeOpened: Anime4kMode = Anime4kMode.default
-    private var anime4kDeblurOpened = false
     private var sessionMode: Anime4kMode = Anime4kMode.default
     private var sessionLoaded = false
     private var contentKey: String? = null
@@ -127,31 +123,49 @@ object PictureEffects {
         if (sessionMode == mode) return
         sessionMode = mode
         anime4k.mode = mode
-    }
-
-    fun setAnime4kSessionDisabled(disabled: Boolean) {
-        if (Anime4kStatus.sessionDisabled == disabled) return
-        Anime4kStatus.sessionDisabled = disabled
-        colorTone.compareSplit = comparing
-        detail.compareSplit = comparing
-        anime4k.compareSplit = comparing
-        val player = current?.get() ?: return
-        if (player.isPictureHdrSource()) return
-        if (RedrawPolicy.shouldRedrawOnParams(player.isPlaying, player.isPictureEffectsActive())) {
-            player.redrawVideoFrame()
-        }
+        // 链已挂时下一帧按新模式自建；未挂时由起播的 onPrepare 带进去。
+        Anime4kStatus.requestChainSync()
     }
 
     /**
      * 播放器面板的 Anime4K 开关：只作用于本次播放，不落库。
      * 下一次起播回到「低分辨率自动开启 + 上限」的自动判断；「关」只让本次播放直通。
+     *
+     * 只改会话状态 + 让链在下一帧自建，**不重建内核**：重建内核会重新请求数据源，
+     * 直链 m3u8 带时效 token，重开一次就整段播放失败（真机：nby 直链点开启后
+     * `ERROR_CODE_PARSING_MANIFEST_MALFORMED`，自动重解析才恢复）。
      */
     fun setAnime4kSessionEnabled(enabled: Boolean) {
         Anime4kStatus.sessionForced = enabled
-        // 本次链路已带档位在跑（自动命中）：无需重建，直接记下已生效，
-        // 否则之后每次面板操作都会再触发一次内核重建。
-        if (Anime4kStatus.sessionForced && Anime4kStatus.tierActive) anime4kForcedOpened = true
-        setAnime4kSessionDisabled(!enabled)
+        syncAnime4kEffect()
+        Anime4kStatus.requestChainSync()
+        Anime4kStatus.sessionDisabled = !enabled
+        colorTone.compareSplit = comparing
+        detail.compareSplit = comparing
+        anime4k.compareSplit = comparing
+        redrawPictureFrame()
+    }
+
+    /**
+     * 把当前设置同步到已挂的 Anime4K 效果实例上（链在下一帧读这些字段自建）。
+     * 关闭时保留原档位，重新打开不需要重建内核。
+     */
+    private fun syncAnime4kEffect() {
+        val manual = Anime4kSettings.manualActive()
+        val auto = Anime4kSettings.autoEnabled()
+        anime4k.manualEnabled = manual
+        anime4k.autoMaxWidth = if (auto) Anime4kSettings.autoMaxWidth() else 0
+        anime4k.mode = sessionMode
+        if (manual || auto) anime4k.tier = Anime4kTier.current()
+        Anime4kStatus.requestChainSync()
+    }
+
+    private fun redrawPictureFrame() {
+        val player = current?.get() ?: return
+        if (player.isPictureHdrSource()) return
+        if (RedrawPolicy.shouldRedrawOnParams(player.isPlaying, player.isPictureEffectsActive())) {
+            player.redrawVideoFrame()
+        }
     }
 
     fun onContentReplaced(url: String?) {
@@ -197,10 +211,6 @@ object PictureEffects {
         anime4k.autoMaxWidth = if (auto) Anime4kSettings.autoMaxWidth() else 0
         anime4k.tier = if (anime4kWanted) tier else null
         anime4kOpened = anime4kWanted
-        anime4kForcedOpened = Anime4kStatus.sessionForced
-        anime4kTierOpened = tier
-        anime4kModeOpened = sessionMode
-        anime4kDeblurOpened = Anime4kSettings.deblur()
         colorTone.setProfile(profile)
         detail.profile = profile
         val enabled = !profile.isNoOp || anime4kWanted
@@ -208,10 +218,21 @@ object PictureEffects {
         if (enabled) player.applyVideoEffects(effectsFor(manual, auto))
     }
 
+    /**
+     * 内核释放：只解绑引用，**不重置本次播放的会话状态**（[contentKey] / [sessionLoaded] /
+     * `Anime4kStatus.sessionForced` 等）。
+     *
+     * 画面参数、渲染方式、解码方式变更走的都是「释放内核 + 同地址重播」
+     * （`releaseKernel` → `ExoPlayer.release()` → 新建内核 → `setDataSource` 同一 URL），
+     * 内容没变却会经过这里。旧实现在这里把 contentKey 清空，重建后的
+     * `onContentReplaced(同 URL)` 便当成换片 → `Anime4kStatus.resetSession()`，
+     * 面板「本次播放」开关和本次模式当场被打回默认；而 1080p 这类高于
+     * `ANIME4K_AUTO_MAX_WIDTH` 的片又必须靠这次重建才能把 manualEnabled 带进链路，
+     * 于是点「开启」后链路仍是纯拷贝（真机日志：rebuild 后 `tier=off passes=0`）。
+     * 换片仍由 [onContentReplaced] 按 URL 变化判定重置。
+     */
     fun onPlayerReleased(player: PictureEffectHost) {
         if (current?.get() === player) current = null
-        contentKey = null
-        sessionLoaded = false
     }
 
     fun anime4kUnavailable(): Boolean {
@@ -243,15 +264,16 @@ object PictureEffects {
     fun consumeRestartNeeded(): Boolean {
         val player = current?.get() ?: return false
         if (tunneling || player.isPictureHdrSource()) return false
-        val anime4kWanted = Anime4kSettings.manualActive() || Anime4kSettings.autoEnabled()
-        if (anime4kWanted != anime4kOpened) return true
-        // 面板「本次播放」开在自动未命中的视频上（2K/4K）：链路当时是被上限裁掉的，
-        // 必须重建一次才能把 manualEnabled 带进去，否则点了没反应。
-        if (Anime4kStatus.sessionForced && !anime4kForcedOpened) return true
-        if (anime4kWanted && Anime4kTier.current() != anime4kTierOpened) return true
-        if (anime4kWanted && sessionMode != anime4kModeOpened) return true
-        if (anime4kWanted && Anime4kSettings.deblur() != anime4kDeblurOpened) return true
-        if (Anime4kSettings.manualActive() && !Anime4kStatus.tierActive) return true
+        if (anime4kOpened) {
+            // 链已挂：面板参数（开关/档位/模式/去模糊）就地热更新，链在下一帧按
+            // 当前设置自建。**不能**为这类纯着色器参数重建内核——重建要重开数据源，
+            // 直链 m3u8 的时效 token 一过期就会整段播放失败（真机：nby 直链点开启后
+            // ERROR_CODE_PARSING_MANIFEST_MALFORMED，靠自动重解析才恢复）。
+            syncAnime4kEffect()
+        } else if (Anime4kSettings.manualActive() || Anime4kSettings.autoEnabled()) {
+            // 效果链根本没挂（自动关 + 无预置）：只能重建内核把效果带上去。
+            return true
+        }
         return restartNeeded(wanted(), openedThisSession, preset() == PicturePreset.Original)
     }
 
