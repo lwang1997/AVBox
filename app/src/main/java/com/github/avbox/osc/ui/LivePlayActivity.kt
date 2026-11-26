@@ -2,11 +2,14 @@
 
 package com.github.avbox.osc.ui
 
+import android.content.Context
 import android.content.pm.ActivityInfo
 import android.content.res.Configuration
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.os.PowerManager
+import android.view.ViewGroup
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
 import androidx.activity.viewModels
@@ -19,6 +22,7 @@ import androidx.compose.ui.platform.ComposeView
 import androidx.core.view.WindowCompat
 import androidx.core.view.WindowInsetsCompat
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import com.github.avbox.osc.R
 import com.github.avbox.osc.api.ApiConfig
@@ -47,6 +51,7 @@ import java.text.SimpleDateFormat
 import java.util.ArrayList
 import java.util.Date
 import java.util.Locale
+import java.lang.ref.WeakReference
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.StateFlow
@@ -58,6 +63,23 @@ class LivePlayActivity : BaseActivity() {
         private const val TAG = "LivePlayActivity"
         private const val SYSBAR_APPEARANCE_REASSERT_DELAY_MS = 400L
         private const val CONNECT_TIMEOUT_SWITCH_DELAY = 3500L
+
+        /** 小窗开着时每 500ms 核对一次系统小窗状态（关小窗不保证有生命周期回调）。 */
+        private const val PIP_WATCH_INTERVAL_MS = 500L
+
+        /** 连续两次看到"不在小窗且没回前台"才判定小窗被关闭。 */
+        private const val PIP_GONE_STRIKES = 2
+
+        /** 直播小窗关闭后等系统把小窗窗口收完再释放内核：在收窗过渡里拆 SurfaceView 会闪退。 */
+        private const val PIP_LIVE_RELEASE_DELAY_MS = 700L
+
+        private val pipReleaseHandler = Handler(Looper.getMainLooper())
+
+        /**
+         * 当前真正持有直播内核的页面。小窗浮在 App 上方时，用户可能又开一个直播/视频页，
+         * 内核会被新页面接手，收尾（exitLive）只能由持有者做。
+         */
+        private var currentLivePage: WeakReference<LivePlayActivity>? = null
         private val FORMAT_DATE1 = SimpleDateFormat("MM-dd", Locale.getDefault())
     }
 
@@ -190,7 +212,10 @@ class LivePlayActivity : BaseActivity() {
         epgController.reloadAddress()
         nowday = Date()
         epgController.epgDayPresented = FORMAT_DATE1.format(nowday)
+        // 先接管播放内核（本页成为持有者），再收掉旧小窗：这样旧页收尾时不会再去拆内核
         initVideoView()
+        // 打开直播页 = 新的播放页：把小窗连同它的播放一起停掉
+        PictureInPictureHelper.closeHostOnNewPlayerPage()
         findViewById<ComposeView>(R.id.compose_view).setContent {
             AVBoxTheme(manageStatusBarIcons = false) {
                 SheetHostScaffold {
@@ -209,8 +234,16 @@ class LivePlayActivity : BaseActivity() {
 
     override fun onResume() {
         super.onResume()
+        // 小窗被展开回页面（或普通返回前台）时本次小窗会话结束；仍在小窗里则保留标记
+        if (!isInPip()) {
+            pipSession = false
+            pipConfirmed = false
+            pipGoneStrikes = 0
+        }
         applyStatusBarAppearance()
         exitingLivePlay = false
+        // 回到前台的这一页就是直播内核的实际持有者（小窗里的旧页面被收尾时不能动它）
+        currentLivePage = WeakReference(this)
         val takenOverByVod = PlaybackService.peek()?.enterLiveState() ?: false
         rebindLiveControllerIfNeeded()
         if (takenOverByVod) {
@@ -223,11 +256,62 @@ class LivePlayActivity : BaseActivity() {
     /** 正在画中画中：onPause 仍会触发，但不能暂停直播画面。 */
     private var inPictureInPicture = false
 
+    /**
+     * 本次前台周期内进过小窗。关小窗时系统不保证回调 onPictureInPictureModeChanged(false)，
+     * 也不保证先让本页走 onStop（小窗浮在 App 上方时本页早就不是前台了），
+     * 所以除了 onStop，还要靠 [pipWatch] 盯系统的小窗状态。
+     */
+    private var pipSession = false
+
+    /** 已经确认真的进过小窗（避免把"系统还没切进小窗"误判成退出）。 */
+    private var pipConfirmed = false
+
+    /** 连续多次看到"已不在小窗且没回前台"才判定被关闭。 */
+    private var pipGoneStrikes = 0
+
+    /** 已经安排"等小窗窗口收完再释放内核"，onDestroy 就不要再立刻拆一次。 */
+    private var liveReleaseDeferred = false
+
     /** 驱动 Compose 隐藏直播播放器上的常驻按钮。 */
     private val pipUiVisible = mutableStateOf(false)
 
     private fun isInPip(): Boolean =
         Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && isInPictureInPictureMode
+
+    /**
+     * 小窗开着时的核对循环：确认进过小窗、后来又不在小窗里、也没有回到前台，
+     * 才算小窗被用户关掉（小窗浮在 App 上方时，用户继续切换界面/点视频都不受影响）。
+     */
+    private val pipWatch = object : Runnable {
+        override fun run() {
+            if (!pipSession || isFinishing || isDestroyed) return
+            when {
+                isInPip() -> {
+                    pipConfirmed = true
+                    pipGoneStrikes = 0
+                }
+                !pipConfirmed -> Unit
+                lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED) -> {
+                    pipSession = false
+                    return
+                }
+                isScreenInteractive() -> {
+                    pipGoneStrikes++
+                    if (pipGoneStrikes >= PIP_GONE_STRIKES) {
+                        AppLog.i(TAG + " watch -> pip dismissed")
+                        onPipDismissed()
+                        return
+                    }
+                }
+            }
+            handler.postDelayed(this, PIP_WATCH_INTERVAL_MS)
+        }
+    }
+
+    private fun startPipWatch() {
+        handler.removeCallbacks(pipWatch)
+        handler.postDelayed(pipWatch, PIP_WATCH_INTERVAL_MS)
+    }
 
     private fun canEnterPictureInPicture(): Boolean =
         PictureInPictureHelper.isSupported(this) && kernelView?.isPlaying == true
@@ -243,6 +327,10 @@ class LivePlayActivity : BaseActivity() {
         pipUiVisible.value = true
         if (PictureInPictureHelper.enter(this, true, rect)) {
             inPictureInPicture = true
+            pipSession = true
+            pipConfirmed = false
+            pipGoneStrikes = 0
+            startPipWatch()
             AppLog.i(TAG + " enter picture-in-picture")
         } else {
             pipUiVisible.value = false
@@ -263,6 +351,97 @@ class LivePlayActivity : BaseActivity() {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
         inPictureInPicture = isInPictureInPictureMode
         pipUiVisible.value = isInPictureInPictureMode
+        if (isInPictureInPictureMode) {
+            pipSession = true
+            pipConfirmed = true
+            pipGoneStrikes = 0
+            startPipWatch()
+        } else {
+            PictureInPictureHelper.unregisterHost(this)
+        }
+        // 退出小窗后的关闭判定交给 pipWatch（展开回页面会先 onResume，标记被清掉）
+    }
+
+    /**
+     * 小窗被用户关闭（或本页被系统收走）：直播被丢在后台就会一直抽流，
+     * 再回直播页还会撞上半死的内核（卡顿后闪退）。
+     */
+    override fun onStop() {
+        super.onStop()
+        if (!pipSession || isChangingConfigurations || isFinishing) return
+        val screenOn = isScreenInteractive()
+        AppLog.i(TAG + " stop in pip, inPip=" + isInPip() + " screenOn=" + screenOn)
+        if (!screenOn) {
+            // 熄屏/锁屏同样会走 onStop，但这不是关闭小窗：只暂停，小窗与页面保留
+            kernelView?.pause()
+            return
+        }
+        if (isInPip()) {
+            // 小窗还在屏幕上（浮在 App 上方、用户继续操作时本页不是前台）：不是关闭
+            startPipWatch()
+            return
+        }
+        onPipDismissed()
+    }
+
+    /** 小窗已被关闭：先停画面，等小窗窗口收完再释放内核，最后结束直播页。 */
+    private fun onPipDismissed() {
+        if (!pipSession) return
+        pipSession = false
+        pipConfirmed = false
+        pipGoneStrikes = 0
+        inPictureInPicture = false
+        exitingLivePlay = true
+        pipUiVisible.value = false
+        // 小窗浮在 App 上方时，用户可能已经开了别的直播/视频、内核被新页面接手：
+        // 这时只收本页，绝不能把别人正在放的内容拆掉
+        val ownsKernel = currentLivePage?.get() === this && PlaybackService.peek()?.isLiveMode() == true
+        if (ownsKernel) {
+            val view = kernelView
+            if (view != null) {
+                try {
+                    view.pause()
+                } catch (t: Throwable) {
+                    AppLog.e(TAG, t)
+                }
+            }
+            scheduleLiveReleaseAfterPip()
+        } else {
+            AppLog.i(TAG + " pip dismissed, kernel owned by other page")
+        }
+        if (!isFinishing && !isDestroyed) finish()
+    }
+
+    /**
+     * 推迟释放直播内核：小窗的收窗过渡期间拆 SurfaceView 会闪退，
+     * 所以先静音、把窗口收完，再去释放；期间若有新直播页接手就什么都不做。
+     */
+    private fun scheduleLiveReleaseAfterPip() {
+        if (liveReleaseDeferred) return
+        liveReleaseDeferred = true
+        AppLog.i(TAG + " pip dismissed, release live kernel deferred")
+        val self = this
+        pipReleaseHandler.postDelayed({
+            val engine = PlaybackService.peek() ?: return@postDelayed
+            if (engine.isReleased()) return@postDelayed
+            val current = currentLivePage?.get()
+            if (current != null && current !== self) {
+                AppLog.i(TAG + " deferred release skipped: kernel taken by other page")
+                return@postDelayed
+            }
+            currentLivePage = null
+            try {
+                engine.exitLive()
+            } catch (t: Throwable) {
+                AppLog.e(TAG, t)
+            }
+        }, PIP_LIVE_RELEASE_DELAY_MS)
+    }
+
+    /** 屏幕是否亮着：熄屏时不能把小窗的 onStop 当成"小窗被关闭"。 */
+    private fun isScreenInteractive(): Boolean {
+        val power = getSystemService(Context.POWER_SERVICE) as? PowerManager ?: return true
+        return power.isInteractive
     }
 
     override fun onPause() {
@@ -271,9 +450,22 @@ class LivePlayActivity : BaseActivity() {
     }
 
     override fun onDestroy() {
-        super.onDestroy()
+        handler.removeCallbacks(pipWatch)
+        PictureInPictureHelper.unregisterHost(this)
         overlay.hideSwitchChannelSnapshot()
-        PlaybackService.peek()?.exitLive()
+        // 小窗会话没收尾就被销毁：同样推迟释放，别在收窗过渡里拆内核
+        if (pipSession) {
+            scheduleLiveReleaseAfterPip()
+        } else if (!liveReleaseDeferred && currentLivePage?.get() === this) {
+            // 只有还持有直播内核的页面才停内核；内核被新页面接手时不能动它
+            try {
+                PlaybackService.peek()?.exitLive()
+            } catch (t: Throwable) {
+                AppLog.e(TAG, t)
+            }
+            currentLivePage = null
+        }
+        super.onDestroy()
         kernelView = null
         handler.removeCallbacksAndMessages(null)
         epgController.cancelAll()
@@ -284,10 +476,14 @@ class LivePlayActivity : BaseActivity() {
         val controller = ComposeLiveController(this)
         controller.listener = liveControlListener
         liveController = controller
-        val view = PlaybackService.engine(this).also { it.enterLive() }.player()
+        val view = PlaybackService.engine(this).also { it.enterLive(reuseLivePlayer = true) }.player()
+        // 播放器视图是全 App 共用的：上一页（可能还在小窗里）还挂着它时，
+        // 先摘下来，否则下面 Compose 的 AndroidView 会抛 "child already has a parent" 直接闪退。
+        (view.parent as? ViewGroup)?.removeView(view)
         view.setVideoController(controller)
         view.setProgressSink(null)
         kernelView = view
+        currentLivePage = WeakReference(this)
     }
 
     private fun rebindLiveControllerIfNeeded() {

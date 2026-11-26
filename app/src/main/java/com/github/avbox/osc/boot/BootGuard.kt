@@ -57,6 +57,47 @@ object BootGuard {
             }
             if (previous != null) previous.uncaughtException(thread, throwable)
         }
+        logLastCrash()
+    }
+
+    /**
+     * 上一次进程如果是崩溃/ANR 退出，把原因和堆栈写进日志，方便排查"闪退"。
+     * 同一次崩溃只报一次；Android 11 以下没有这个接口。
+     */
+    @JvmStatic
+    fun logLastCrash() {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) return
+        try {
+            val context = AppContextHolder.context() ?: return
+            val manager = context.getSystemService(Context.ACTIVITY_SERVICE) as? ActivityManager ?: return
+            val exits = try {
+                manager.getHistoricalProcessExitReasons(context.packageName, 0, 6)
+            } catch (t: Throwable) {
+                null
+            } ?: return
+            for (exit in exits) {
+                if (exit == null) continue
+                val reason = exit.reason
+                if (reason != ApplicationExitInfo.REASON_CRASH &&
+                    reason != ApplicationExitInfo.REASON_CRASH_NATIVE &&
+                    reason != ApplicationExitInfo.REASON_ANR
+                ) continue
+                if (exit.timestamp <= KV.get(KVKeys.EXIT_CRASH_LAST_TS, 0L)) return
+                KV.put(KVKeys.EXIT_CRASH_LAST_TS, exit.timestamp)
+                AppLog.i("echo-exit-crash: reason=" + reason + " desc=" + exit.description + " ts=" + exit.timestamp)
+                val trace = try {
+                    exit.traceInputStream?.bufferedReader()?.use { it.readText() }.orEmpty()
+                } catch (t: Throwable) {
+                    ""
+                }
+                for (chunk in trace.take(6000).chunked(2000)) {
+                    AppLog.i("echo-exit-trace: " + chunk)
+                }
+                return
+            }
+        } catch (t: Throwable) {
+            AppLog.i("echo-exit-crash: read failed " + t.message)
+        }
     }
 
     private fun writeCrashMarker() {

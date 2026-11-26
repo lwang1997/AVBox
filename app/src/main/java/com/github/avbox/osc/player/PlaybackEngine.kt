@@ -201,12 +201,17 @@ class PlaybackEngine(context: Context) : PlaybackHostApi, VideoCodecObserver {
         return true
     }
 
-    fun enterLive() {
+    /**
+     * 进入直播。默认重建播放器；[reuseLivePlayer] 为 true 且内核已经在直播、播放器还在时直接接管复用，
+     * 不去释放旧页面（旧页面可能还挂在小窗里，在它收尾前拆 SurfaceView 会闪退）。
+     */
+    fun enterLive(reuseLivePlayer: Boolean = false) {
         if (released) return
         progressSampler.flushNow()
         controller.clearSession()
         controller.clearStartedContent()
-        AppLog.i(TAG + " enter live mode")
+        val reuse = reuseLivePlayer && liveMode && videoView.mediaPlayer != null
+        AppLog.i(TAG + " enter live mode" + (if (reuse) " (reuse player)" else ""))
         val page = attachedPage()
         if (page != null) detach(page)
         liveMode = true
@@ -214,7 +219,7 @@ class PlaybackEngine(context: Context) : PlaybackHostApi, VideoCodecObserver {
         serviceLostWasPlaying = false
         liveFlag = true
         cancelIdleRelease()
-        releasePlayer()
+        if (!reuse) releasePlayer()
         videoView.setProgressSink(null)
         videoView.setExoDiskCacheEnabled(false)
         videoView.clearArtwork()

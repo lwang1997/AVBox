@@ -13,6 +13,7 @@ object KVKeys {
     const val BOOT_LOADING_COUNT = "boot_loading_count"
     const val BOOT_LOAD_START_ELAPSED = "boot_load_start_elapsed"
     const val BOOT_LAST_ATTEMPT_AT = "boot_last_attempt_at"
+    const val EXIT_CRASH_LAST_TS = "exit_crash_last_ts"
     const val BOOT_VOD_SOURCE = "boot_vod_source"
     const val BOOT_LIVE_SOURCE = "boot_live_source"
     const val BOOT_SAFE_DISABLED = "boot_safe_disabled"

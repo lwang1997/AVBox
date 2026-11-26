@@ -132,6 +132,8 @@ fun DetailScreen(activity: DetailActivity, vm: DetailViewModel) {
     var rootSize by remember { mutableStateOf(IntSize.Zero) }
 
     val container = activity.playContainer
+    // 系统小窗里只该看到画面：整页内容（Hero 的播放按钮之类）不能被缩进小窗
+    val pipActive = container?.uiState()?.pictureInPicture == true
     val scope = rememberCoroutineScope()
     var backdropPic by remember { mutableStateOf("") }
     var backdropSeed by remember { mutableStateOf<Int?>(null) }
@@ -207,7 +209,12 @@ fun DetailScreen(activity: DetailActivity, vm: DetailViewModel) {
 
     val slideAnim = remember { Animatable(0f) }
 
-    fun slideProgress(): Float = if (inTransition) slideAnim.value else if (full) 1f else 0f
+    fun slideProgress(): Float = when {
+        pipActive -> 1f
+        inTransition -> slideAnim.value
+        full -> 1f
+        else -> 0f
+    }
 
     LaunchedEffect(enteringFullscreen, exitingFullscreen) {
         when {
@@ -301,7 +308,7 @@ fun DetailScreen(activity: DetailActivity, vm: DetailViewModel) {
             Box(
                 modifier = Modifier.fillMaxSize(),
             ) {
-                if (!fullBox || exitingFullscreen) {
+                if ((!fullBox && !pipActive) || exitingFullscreen) {
                     when (val state = pageState) {
                         is DetailViewModel.PageState.Loading -> {
                             Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -332,7 +339,7 @@ fun DetailScreen(activity: DetailActivity, vm: DetailViewModel) {
                         }
                     }
                 }
-                if (!fullBox || exitingFullscreen) {
+                if ((!fullBox && !pipActive) || exitingFullscreen) {
                     DetailTopScrim(
                         modifier = Modifier.align(Alignment.TopCenter),
                         alpha = if (flatHero) 1f else 1f - heroProgress,
@@ -376,7 +383,7 @@ fun DetailScreen(activity: DetailActivity, vm: DetailViewModel) {
                 val maxPosY = (rootSize.height - playerHeightPx).coerceAtLeast(0f)
                 val posX = (if (dragX.isNaN()) maxPosX / 2f else dragX).coerceIn(0f, maxPosX)
                 val posY = (if (dragY.isNaN()) topActionsBottomPx else dragY).coerceIn(0f, maxPosY)
-                val draggable = !full && !inTransition
+                val draggable = !full && !inTransition && !pipActive
 
                 Box(
                     modifier = Modifier

@@ -7,6 +7,8 @@ import android.content.res.Configuration
 import android.net.Uri
 import android.os.Build
 import android.os.Looper
+import android.os.PowerManager
+import android.os.SystemClock
 import android.webkit.WebView
 import android.widget.Toast
 import androidx.activity.compose.setContent
@@ -18,6 +20,7 @@ import androidx.core.view.WindowInsetsCompat
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ViewModelProvider
 import com.github.avbox.osc.R
 import com.github.avbox.osc.ui.base.BaseActivity
@@ -38,9 +41,17 @@ import com.github.avbox.osc.util.AppLog
 import com.github.avbox.osc.util.PermissionHelper
 import com.github.avbox.osc.util.SpiderStorageNotice
 import java.util.concurrent.atomic.AtomicBoolean
-import kotlinx.coroutines.launch
 
 private const val SYSBAR_APPEARANCE_REASSERT_DELAY_MS = 400L
+
+/** 小窗开着时每 500ms 核对一次系统小窗状态（关小窗不保证有生命周期回调）。 */
+private const val PIP_WATCH_INTERVAL_MS = 500L
+
+/** 连续两次看到"不在小窗且没回前台"才判定小窗被关闭。 */
+private const val PIP_GONE_STRIKES = 2
+
+/** 小窗进出前后这段时间内不做"横屏即全屏"的自动切换（小窗窗口本身是横的）。 */
+private const val PIP_ROTATION_GRACE_MS = 1500L
 
 class DetailActivity : BaseActivity(), PageHost {
 
@@ -127,6 +138,8 @@ class DetailActivity : BaseActivity(), PageHost {
                 }
             }
         })
+        // 打开新的详情页 = 新的播放页：把小窗连同它的播放一起停掉，避免两个页面抢同一个内核
+        PictureInPictureHelper.closeHostOnNewPlayerPage()
         vm.initFromIntent(intent)
         findViewById<androidx.compose.ui.platform.ComposeView>(R.id.compose_view).setContent {
             AVBoxTheme(manageStatusBarIcons = false) {
@@ -221,8 +234,68 @@ class DetailActivity : BaseActivity(), PageHost {
     /** 正在画中画中：此时 Activity 仍会走 onPause，但不能暂停视频。 */
     private var inPictureInPicture = false
 
+    /**
+     * 本次前台周期内进过小窗。关小窗时系统不保证回调 onPictureInPictureModeChanged(false)，
+     * 也不保证先让本页走 onStop（小窗浮在 App 上方时本页早就不是前台了），
+     * 所以除了 onStop，还要靠 [pipWatch] 盯系统的小窗状态。展开回页面时由 onResume 清掉。
+     */
+    private var pipSession = false
+
+    /** 已经确认真的进过小窗（避免把"系统还没切进小窗"误判成退出）。 */
+    private var pipConfirmed = false
+
+    /** 连续多次看到"已不在小窗且没回到前台"才判定被关闭，避开展开过程的瞬时状态。 */
+    private var pipGoneStrikes = 0
+
+    /** 进小窗前是否全屏：从小窗回来要恢复成同一种状态，别把人卡在全屏里。 */
+    private var pipWasFullscreen = false
+
+    /** 已退出小窗、等页面回到前台时再恢复窗口状态（避免在没显示的页面上跑动画卡住）。 */
+    private var pipRestorePending = false
+
+    /** 退出小窗的时刻，用来给"横屏即全屏"的自动切换设一段豁免期。 */
+    private var pipExitedAt = 0L
+
     private fun isInPip(): Boolean =
         Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && isInPictureInPictureMode
+
+    /**
+     * 小窗开着时的核对循环：确认进过小窗、后来又不在小窗里、也没有回到前台，
+     * 才算小窗被用户关掉（小窗浮在 App 上方时，用户继续切换界面/点视频都不受影响）。
+     */
+    private val pipWatch = object : Runnable {
+        override fun run() {
+            if (!pipSession || isFinishing || isDestroyed) return
+            when {
+                isInPip() -> {
+                    pipConfirmed = true
+                    pipGoneStrikes = 0
+                }
+                // 刚请求进小窗、系统还没落地：先不判
+                !pipConfirmed -> Unit
+                // 回到页面了（小窗被展开）：本次小窗会话结束
+                lifecycle.currentState.isAtLeast(Lifecycle.State.RESUMED) -> {
+                    pipSession = false
+                    return
+                }
+                // 熄屏/锁屏时会走 onStop，这时状态也可能是"不在小窗"，不能当成被关闭
+                isScreenInteractive() -> {
+                    pipGoneStrikes++
+                    if (pipGoneStrikes >= PIP_GONE_STRIKES) {
+                        AppLog.i("echo-pip: watch -> dismissed")
+                        onPipDismissed()
+                        return
+                    }
+                }
+            }
+            window.decorView.postDelayed(this, PIP_WATCH_INTERVAL_MS)
+        }
+    }
+
+    private fun startPipWatch() {
+        window.decorView.removeCallbacks(pipWatch)
+        window.decorView.postDelayed(pipWatch, PIP_WATCH_INTERVAL_MS)
+    }
 
     private fun canEnterPictureInPicture(): Boolean {
         if (!PictureInPictureHelper.isSupported(this)) return false
@@ -241,6 +314,7 @@ class DetailActivity : BaseActivity(), PageHost {
             }
             return
         }
+        val wasFullscreen = vm.fullScreen.value
         val container = requireNotNull(playContainer)
         val rect = PictureInPictureHelper.sourceRectHint(container.kernelView?.playerContainer())
         val playing = container.kernelView?.isPlaying == true
@@ -248,7 +322,13 @@ class DetailActivity : BaseActivity(), PageHost {
         ui.updatePictureInPicture(true)
         if (PictureInPictureHelper.enter(this, playing, rect)) {
             inPictureInPicture = true
-            AppLog.i("echo-pip: enter from detail")
+            pipSession = true
+            pipConfirmed = false
+            pipGoneStrikes = 0
+            pipWasFullscreen = wasFullscreen
+            pipRestorePending = false
+            startPipWatch()
+            AppLog.i("echo-pip: enter from detail fullscreen=" + wasFullscreen)
         } else {
             ui.updatePictureInPicture(false)
         }
@@ -269,11 +349,70 @@ class DetailActivity : BaseActivity(), PageHost {
         inPictureInPicture = isInPictureInPictureMode
         playContainer?.uiState()?.updatePictureInPicture(isInPictureInPictureMode)
         if (isInPictureInPictureMode) {
+            pipSession = true
+            pipConfirmed = true
+            pipGoneStrikes = 0
+            startPipWatch()
             playContainer?.uiState()?.clearOverlays()
         } else {
-            // 退出小窗回到页面时，补一次状态校准，避免小窗期间的系统配置变化影响播放器
-            playContainer?.hostResume()
+            PictureInPictureHelper.unregisterHost(this)
+            // 记录退出时刻：小窗带来的那次横屏配置不能把页面顶进全屏
+            pipExitedAt = SystemClock.uptimeMillis()
+            pipRestorePending = true
         }
+        // 退出小窗后的窗口状态恢复放在 onResume（页面真的回到前台时再切，避免动画卡住）
+    }
+
+    /**
+     * 小窗被用户关闭（或本页被系统收走）：不在这里收尾就会留下
+     * "小窗没了、声音还在、又回不到播放页"的幽灵播放。
+     */
+    override fun onStop() {
+        super.onStop()
+        if (!pipSession || isChangingConfigurations || isFinishing) return
+        val screenOn = isScreenInteractive()
+        AppLog.i("echo-pip: stop in pip, inPip=" + isInPip() + " screenOn=" + screenOn)
+        if (!screenOn) {
+            // 熄屏/锁屏同样会走 onStop，但这不是关闭小窗：只暂停，页面和小窗保留
+            playContainer?.hostPause()
+            return
+        }
+        if (isInPip()) {
+            // 小窗还在屏幕上（浮在 App 上方、用户继续操作时本页不是前台）：不是关闭，
+            // 交给核对循环，真被关掉时会自己收尾
+            startPipWatch()
+            return
+        }
+        onPipDismissed()
+    }
+
+    /** 小窗已被关闭：停播并结束本页，别让播放器和页面留在后台当幽灵。 */
+    private fun onPipDismissed() {
+        if (!pipSession) return
+        pipSession = false
+        pipConfirmed = false
+        pipGoneStrikes = 0
+        pipRestorePending = false
+        pipWasFullscreen = false
+        inPictureInPicture = false
+        val container = playContainer
+        // 小窗浮在 App 上方时，用户可能已经开了别的视频、内核被新页面接手：
+        // 只有内核还挂在本页时才去停播，否则只收本页，不能停别人正在放的内容
+        val ownedByThisPage = container != null && PlaybackService.peek()?.attachedPage() === container
+        if (!ownedByThisPage) {
+            AppLog.i("echo-pip: dismissed, engine owned by other page")
+            container?.cancelCastWait()
+            releasePlayContainer()
+        } else {
+            closeInlinePlayer()
+        }
+        if (!isFinishing) finish()
+    }
+
+    /** 屏幕是否亮着：熄屏时不能把小窗的 onStop 当成"小窗被关闭"。 */
+    private fun isScreenInteractive(): Boolean {
+        val power = getSystemService(Context.POWER_SERVICE) as? PowerManager ?: return true
+        return power.isInteractive
     }
 
     override fun showEpisodeSheet() {
@@ -481,6 +620,9 @@ class DetailActivity : BaseActivity(), PageHost {
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
         settleRotationAfterExit()
+        // 小窗进出本身就会换来一次横屏配置（小窗窗口是横的），那不是用户把手机横过来，
+        // 不能因此把页面顶进全屏，否则从小窗回来会被卡在全屏里退不出去。
+        if (pipRotationGraceActive()) return
         // 小窗播放中横屏 → 切到全屏播放
         if (newConfig.orientation == Configuration.ORIENTATION_LANDSCAPE &&
             !vm.fullScreen.value && !vm.enteringFullscreen.value &&
@@ -489,6 +631,12 @@ class DetailActivity : BaseActivity(), PageHost {
             requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
             vm.onFullScreenToggleRequested(true, playbackFacts())
         }
+    }
+
+    /** 小窗期间、以及刚退出小窗的一小段时间内不做"横屏即全屏"的自动切换。 */
+    private fun pipRotationGraceActive(): Boolean {
+        if (pipSession) return true
+        return pipExitedAt > 0 && SystemClock.uptimeMillis() - pipExitedAt < PIP_ROTATION_GRACE_MS
     }
 
     fun settleRotationAfterExit() {
@@ -514,14 +662,46 @@ class DetailActivity : BaseActivity(), PageHost {
 
     override fun onResume() {
         super.onResume()
+        // 小窗被展开回页面（或普通返回前台）时本次小窗会话结束；仍在小窗里则保留标记，
+        // 熄屏后再亮屏也走这里，不能把还没被关闭的小窗当成已结束。
+        if (!isInPip()) {
+            pipSession = false
+            pipConfirmed = false
+            pipGoneStrikes = 0
+            // 小窗已经不在：保证页面回到正常布局（个别机型退出小窗不一定回调模式切换）
+            playContainer?.uiState()?.updatePictureInPicture(false)
+        }
         applyStatusBarAppearance()
         playContainer?.hostResume()
         syncEpisodeAfterMusicPage()
+        restoreAfterPipState()
         val container = playContainer ?: return
         vm.applyPlaybackEntry(
             DetailPlaybackEntry.MusicReturn,
             resumable = container.hasClaimedPlayback() && !container.ownsEngineContent() && container.isPlaybackActive(),
         )
+    }
+
+    /**
+     * 从小窗回来时恢复进小窗前的大小窗状态：进小窗前是页内小窗，回来就别停在全屏
+     * （小窗窗口本身是横的，切回来会被"横屏即全屏"顶成全屏，人就卡在那了）。
+     */
+    private fun restoreAfterPipState() {
+        if (!pipRestorePending) return
+        pipRestorePending = false
+        val wasFullscreen = pipWasFullscreen
+        pipWasFullscreen = false
+        if (isFinishing || isDestroyed) return
+        AppLog.i(
+            "echo-pip: back from pip wasFullscreen=" + wasFullscreen
+                + " full=" + vm.fullScreen.value
+                + " orientation=" + resources.configuration.orientation,
+        )
+        if (wasFullscreen) return
+        if (!vm.fullScreen.value || vm.exitingFullscreen.value || vm.enteringFullscreen.value) return
+        AppLog.i("echo-pip: restore page state after pip (exit fullscreen)")
+        vm.onFullScreenToggleRequested(false, playbackFacts())
+        playContainer?.hideTipOnUiThread()
     }
 
     override fun onPause() {
@@ -533,6 +713,8 @@ class DetailActivity : BaseActivity(), PageHost {
     }
 
     override fun onDestroy() {
+        window.decorView.removeCallbacks(pipWatch)
+        PictureInPictureHelper.unregisterHost(this)
         playContainer?.cancelCastWait()
         releasePlayContainer()
         vm.destroyEngine()
