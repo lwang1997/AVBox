@@ -217,6 +217,7 @@ class OkHttpDataSource private constructor(
         headers.putAll(requestProperties.snapshot)
         headers.putAll(dataSpec.httpRequestHeaders)
         for ((key, value) in headers) {
+            if (isLibraryManagedHeader(key)) continue
             builder.header(key, value)
         }
 
@@ -236,6 +237,20 @@ class OkHttpDataSource private constructor(
         }
         builder.method(dataSpec.httpMethodString, requestBody)
         return builder.build()
+    }
+
+    /**
+     * 站点自带的这几个头不能透传给 OkHttp：尤其 Accept-Encoding。
+     * 一旦请求里出现手写的 Accept-Encoding，OkHttp 就不再走"透明 gzip 解压"，
+     * 服务器回压缩内容时播放器会直接拿到 gzip 字节，表现为 HLS "#EXTM3U 解析失败"。
+     * Range/Host/Connection 同理，由库自己管。
+     */
+    private fun isLibraryManagedHeader(key: String): Boolean = when {
+        key.equals("Accept-Encoding", ignoreCase = true) -> true
+        key.equals("Range", ignoreCase = true) -> true
+        key.equals("Host", ignoreCase = true) -> true
+        key.equals("Connection", ignoreCase = true) -> true
+        else -> false
     }
 
     private fun executeCall(call: Call): Response {
