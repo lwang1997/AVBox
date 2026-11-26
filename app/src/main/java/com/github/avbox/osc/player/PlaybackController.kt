@@ -971,6 +971,15 @@ class PlaybackController {
         this.webHeaderMap = webHeaderMap
     }
 
+    @Volatile
+    private var lastResolvedHeaders: HashMap<String, String>? = null
+
+    fun resolvedHeaders(): HashMap<String, String>? = lastResolvedHeaders?.let { HashMap(it) }
+
+    fun setResolvedHeaders(headers: HashMap<String, String>?) {
+        lastResolvedHeaders = headers?.let { HashMap(it) }
+    }
+
     fun webUserAgent(): String? = webUserAgent
 
     fun setWebUserAgent(webUserAgent: String?) {
@@ -1107,6 +1116,10 @@ class PlaybackController {
 
         override fun setWebHeaderMap(headers: HashMap<String, String>?) {
             this@PlaybackController.setWebHeaderMap(headers)
+        }
+
+        override fun setResolvedHeaders(headers: HashMap<String, String>?) {
+            this@PlaybackController.setResolvedHeaders(headers)
         }
 
         override fun startResolvePlayUrlTimeout() {

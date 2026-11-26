@@ -89,6 +89,8 @@ class PlaybackStarter(private val host: Host) {
 
         fun setWebHeaderMap(headers: HashMap<String, String>?)
 
+        fun setResolvedHeaders(headers: HashMap<String, String>?)
+
         fun startResolvePlayUrlTimeout()
 
         fun startSwitchLinePlayTimeout(isoSession: Boolean)
@@ -165,6 +167,7 @@ class PlaybackStarter(private val host: Host) {
         host.syncDecodeFromGlobal()
         host.setWebPlayUrl(null)
         host.setWebHeaderMap(null)
+        host.setResolvedHeaders(null)
         host.initParseLoadFound()
 
         if (!prepareOnly) {
@@ -231,7 +234,7 @@ class PlaybackStarter(private val host: Host) {
             return
         }
 
-        if (host.preloadConsumeResult(host.progressKey())) return
+        if (!prepareOnly && host.preloadConsumeResult(host.progressKey())) return
         val svm = host.sourceViewModel()
         if (svm != null) {
             svm.getPlay(host.sourceKey(), vod.playFlag, host.progressKey(), vs.url, host.subtitleCacheKey())
@@ -268,6 +271,16 @@ class PlaybackStarter(private val host: Host) {
     }
 
     fun playUrl(url: String, headers: HashMap<String, String>?) {
+        if (host.attemptState().castPrepareOnly) {
+            // 投屏/下载等“只解析”场景：只回填地址与请求头，绝不启动播放管线。
+            AppLog.i("echo-cast prepare: resolve only, url resolved")
+            host.setResolvedHeaders(headers)
+            host.setWebPlayUrl(url)
+            host.stopParse()
+            host.closeCastPrepare()
+            host.cancelPlayTimeout()
+            return
+        }
         host.syncDecodeFromGlobal()
         val target = attachProxySiteKey(url)
         host.updateAttemptState { it.copy(localProxySession = SourcePolicy.isLocalProxyUrl(target)) }
@@ -290,6 +303,7 @@ class PlaybackStarter(private val host: Host) {
         // 直链投递走 2 参 playUrl，本轮不会刷新 playUrlGeneration，而 play() 已 nextGen()
         // —— 进 m3u8 分支前对齐当前轮，否则桥接的 isParseResultCurrent 必判 stale 丢弃播放
         playUrlGeneration = host.resolverCurrentGen()
+        host.setResolvedHeaders(headers)
         host.view()?.playM3u8(target, headers, playUrlGeneration)
         host.setWebPlayUrl(target)
     }
@@ -306,6 +320,7 @@ class PlaybackStarter(private val host: Host) {
             host.handleResolvePlayUrlFailed(PlaybackController.str(R.string.player_play_url_empty))
             return
         }
+        host.setResolvedHeaders(headers)
         val bridge = host.view()
         if (bridge == null || !bridge.isPageAlive()) return
         val generation = host.resolverCurrentGen()

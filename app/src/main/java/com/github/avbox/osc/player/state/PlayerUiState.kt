@@ -128,6 +128,9 @@ class PlayerUiState {
     var paramsSheet: ParamsSheetState? by mutableStateOf(null)
         private set
 
+    var downloadSheet: DownloadSheetState? by mutableStateOf(null)
+        private set
+
     var paramsTab: ParamsTab by mutableStateOf(ParamsTab.Playback)
         private set
 
@@ -145,6 +148,15 @@ class PlayerUiState {
 
     fun dismissParamsSheet() {
         paramsSheet = null
+    }
+
+    fun openDownloadSheet(sheet: DownloadSheetState) {
+        paramsSheet = null
+        downloadSheet = sheet
+    }
+
+    fun dismissDownloadSheet() {
+        downloadSheet = null
     }
 
     fun selectParamsTab(tab: ParamsTab) {
@@ -221,6 +233,7 @@ class PlayerUiState {
     fun clearOverlays() {
         selectDialog = null
         paramsSheet = null
+        downloadSheet = null
         danmuSettingSheet = null
         danmuSearchSheet = null
         subtitleSheet = null
@@ -230,7 +243,8 @@ class PlayerUiState {
     }
 
     val overlayPanelOpen: Boolean
-        get() = selectDialog != null || paramsSheet != null || danmuSettingSheet != null ||
+        get() = selectDialog != null || paramsSheet != null || downloadSheet != null ||
+                danmuSettingSheet != null ||
                 danmuSearchSheet != null || subtitleSheet != null || subtitleSearchSheet != null ||
                 castSheet != null || episodeSheetOpen
 
@@ -547,6 +561,21 @@ class ParamsSheetState(
     val onSetTimeEnd: () -> Unit,
     val onResetTime: () -> Unit,
     val onSearchDanmu: (() -> Unit)?,
+    val onDownloadClicked: (() -> Unit)? = null,
+)
+
+data class DownloadSheetState(
+    val title: String,
+    val episodeName: String,
+    val fileName: String,
+    val kindLabel: String,
+    val url: String,
+    val headers: Map<String, String>,
+    val idmAvailable: Boolean,
+    val onStartBuiltin: () -> Unit,
+    val onStartIdm: () -> Unit,
+    val onCopy: () -> Unit,
+    val warning: String? = null,
 )
 
 class PictureParamsState(

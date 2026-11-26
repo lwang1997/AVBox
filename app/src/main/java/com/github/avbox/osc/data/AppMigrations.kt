@@ -17,3 +17,38 @@ val MIGRATION_2_3 = object : Migration(2, 3) {
         connection.execSQL("ALTER TABLE `vodFollow` ADD COLUMN `tmdbInfo` TEXT NOT NULL DEFAULT ''")
     }
 }
+
+private const val DownloadTaskCreateSql = "CREATE TABLE IF NOT EXISTS `download_task` (" +
+    "`id` TEXT NOT NULL, " +
+    "`sourceKey` TEXT, " +
+    "`vodId` TEXT, " +
+    "`vodName` TEXT, " +
+    "`playFlag` TEXT, " +
+    "`episodeIndex` INTEGER NOT NULL, " +
+    "`episodeName` TEXT, " +
+    "`rawSeriesUrl` TEXT, " +
+    "`url` TEXT NOT NULL, " +
+    "`headersJson` TEXT NOT NULL, " +
+    "`kind` TEXT NOT NULL, " +
+    "`fileName` TEXT NOT NULL, " +
+    "`dirHint` TEXT, " +
+    "`totalBytes` INTEGER NOT NULL, " +
+    "`downloadedBytes` INTEGER NOT NULL, " +
+    "`segmentsDone` INTEGER NOT NULL, " +
+    "`segmentsTotal` INTEGER NOT NULL, " +
+    "`status` TEXT NOT NULL, " +
+    "`error` TEXT, " +
+    "`errorKind` TEXT, " +
+    "`etag` TEXT, " +
+    "`lastModified` TEXT, " +
+    "`contentUri` TEXT, " +
+    "`createdAt` INTEGER NOT NULL, " +
+    "`updatedAt` INTEGER NOT NULL, " +
+    "`completedAt` INTEGER NOT NULL, " +
+    "PRIMARY KEY(`id`))"
+
+val MIGRATION_3_4 = object : Migration(3, 4) {
+    override suspend fun migrate(connection: SQLiteConnection) {
+        connection.execSQL(DownloadTaskCreateSql)
+    }
+}

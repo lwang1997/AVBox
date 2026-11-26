@@ -101,6 +101,7 @@ internal fun DetailContent(
                 onMusic = { activity.openMusicPlayer() },
                 onCast = { activity.openCast() },
                 onCollect = { vm.toggleCollect() },
+                onDownload = { vm.beginEpisodeDownloadSelect() },
                 onFollow = {
                     vm.requestFollowScheduleSuggestion()
                     followScheduleOpen = true

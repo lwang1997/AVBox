@@ -65,6 +65,8 @@ import com.github.avbox.osc.ui.components.LocalTopBarGlassBackdrop
 import com.github.avbox.osc.ui.components.PosterBackdrop
 import com.github.avbox.osc.ui.components.VodCardMenu
 import com.github.avbox.osc.ui.components.rememberVodCardMenuState
+import com.github.avbox.osc.ui.download.DownloadMethodDialog
+import com.github.avbox.osc.ui.download.IdmHeaderConfirmDialog
 import com.github.avbox.osc.ui.theme.AppThemeState
 import com.github.avbox.osc.ui.settings.UiSettingsState
 import com.kyant.backdrop.backdrops.layerBackdrop
@@ -348,7 +350,7 @@ fun DetailScreen(activity: DetailActivity, vm: DetailViewModel) {
             }
 
             val playerContainer = container
-            if (playerContainer != null) {
+            if (playerContainer != null && !activity.playContainerHidden) {
                 // 小窗：窗口按视频画面宽高比收进 Hero 约束框（不裁剪、无黑边）；全屏=铺满，progress 插值
                 val progress = slideProgress()
                 val heroConstraintPx = if (flatHero) {
@@ -436,7 +438,26 @@ fun DetailScreen(activity: DetailActivity, vm: DetailViewModel) {
             }
         }
 
-        EpisodeSheet(vm, slideFromEnd = fullBox && isLandscapeNow, showQuality = full)
+        EpisodeSheet(
+            vm,
+            slideFromEnd = fullBox && isLandscapeNow,
+            showQuality = full,
+            onDownloadSelected = { indices -> activity.startEpisodeDownload(indices) },
+        )
+        activity.downloadMethodPrompt?.let { prompt ->
+            DownloadMethodDialog(
+                idmLabel = prompt.idmLabel,
+                onBuiltin = { prompt.pickBuiltin() },
+                onIdm = { prompt.pickIdm() },
+                onDismiss = { prompt.cancel() },
+            )
+        }
+        activity.idmHeaderConfirmPrompt?.let { prompt ->
+            IdmHeaderConfirmDialog(
+                onContinueIdm = { prompt.useIdm() },
+                onUseBuiltin = { prompt.useBuiltin() },
+            )
+        }
         VodCardMenu(vodMenu) { menuContext.jumpToSearch(it) }
     }
 }

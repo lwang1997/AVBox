@@ -78,6 +78,11 @@ object KVKeys {
     const val SEARCH_THREADS_DEFAULT = 32
     const val LONG_PRESS_SPEED = "long_press_speed"
     const val LONG_PRESS_SPEED_DEFAULT = 3
+    const val DOWNLOAD_CONCURRENCY = "download_concurrency"
+    const val DOWNLOAD_WIFI_ONLY = "download_wifi_only"
+    const val DOWNLOAD_METHOD = "download_method"
+    const val DOWNLOAD_AUTO_RESUME = "download_auto_resume"
+    const val DOWNLOAD_NOTIFY = "download_notify"
     const val BUFFER_TIMES = "buffer_times"
     const val BUFFER_TIMES_DEFAULT = 3
     const val PRELOAD_NEXT_EPISODE = "preload_next_episode"

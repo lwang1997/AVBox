@@ -146,6 +146,7 @@ internal class PlayerConfigDelegate(private val host: VideoPlayerController) {
             } else {
                 null
             },
+            onDownloadClicked = host.downloadRequestHandler,
         )
     }
 

@@ -61,6 +61,8 @@ class VideoPlayerController(
 
     internal val state: PlayerUiState = PlayerUiState()
 
+    internal var downloadRequestHandler: (() -> Unit)? = null
+
     val playerView: PlayerKernelView?
         get() = videoView
 

@@ -224,6 +224,7 @@ internal fun DetailHero(
     onMusic: () -> Unit,
     onCast: () -> Unit,
     onCollect: () -> Unit,
+    onDownload: () -> Unit,
     onFollow: () -> Unit,
     vm: DetailViewModel,
     rollPaused: Boolean = false,
@@ -270,6 +271,7 @@ internal fun DetailHero(
                 onBack = onBack,
                 onSearch = onSearch,
                 onCollect = onCollect,
+                onDownload = onDownload,
                 fallbackColor = circleColor,
             )
             Column(
@@ -359,6 +361,7 @@ internal fun DetailHero(
                     onBack = onBack,
                     onSearch = onSearch,
                     onCollect = onCollect,
+                    onDownload = onDownload,
                     fallbackColor = circleColor,
                 )
             }
@@ -411,6 +414,7 @@ private fun DetailHeroTopActions(
     onBack: () -> Unit,
     onSearch: () -> Unit,
     onCollect: () -> Unit,
+    onDownload: () -> Unit,
     fallbackColor: Color,
 ) {
     Row(
@@ -464,6 +468,19 @@ private fun DetailHeroTopActions(
                     } else {
                         MaterialTheme.colorScheme.onSurface
                     },
+                    modifier = Modifier.size(22.dp),
+                )
+            }
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clickable(onClick = onDownload),
+                contentAlignment = Alignment.Center,
+            ) {
+                Icon(
+                    painter = painterResource(R.drawable.ic_download),
+                    contentDescription = stringResource(R.string.detail_download),
+                    tint = MaterialTheme.colorScheme.onSurface,
                     modifier = Modifier.size(22.dp),
                 )
             }

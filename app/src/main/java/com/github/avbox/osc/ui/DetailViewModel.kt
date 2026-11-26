@@ -327,6 +327,10 @@ class DetailViewModel : ViewModel(), TmdbPosterCache {
     val qualitySelected = _qualitySelected.asStateFlow()
     private val _episodeSheet = MutableStateFlow(false)
     val episodeSheet = _episodeSheet.asStateFlow()
+    private val _episodeSelectMode = MutableStateFlow(false)
+    val episodeSelectMode = _episodeSelectMode.asStateFlow()
+    private val _selectedEpisodes = MutableStateFlow<Set<Int>>(emptySet())
+    val selectedEpisodes = _selectedEpisodes.asStateFlow()
     private val _toastEvent = MutableSharedFlow<String>(
         extraBufferCapacity = 1,
         onBufferOverflow = BufferOverflow.DROP_OLDEST,
@@ -610,6 +614,42 @@ class DetailViewModel : ViewModel(), TmdbPosterCache {
     fun dismissEpisodeSheet() {
         _episodeSheet.value = false
         sendCommand(PlaybackCommand.SetEpisodeSheetOpen(false))
+    }
+
+    fun beginEpisodeDownloadSelect() {
+        val info = vodInfo ?: return
+        showEpisodeSheet()
+        startEpisodeSelect(info.playIndex.coerceAtLeast(0))
+    }
+
+    fun startEpisodeSelect(index: Int) {
+        _episodeSelectMode.value = true
+        _selectedEpisodes.value = setOf(index)
+    }
+
+    fun toggleEpisodeSelect(index: Int) {
+        val current = _selectedEpisodes.value
+        _selectedEpisodes.value = if (current.contains(index)) current - index else current + index
+    }
+
+    fun selectAllEpisodes() {
+        val info = vodInfo ?: return
+        val list = info.seriesMap?.get(info.playFlag).orEmpty()
+        _selectedEpisodes.value = list.indices.toSet()
+    }
+
+    fun exitEpisodeSelect() {
+        _episodeSelectMode.value = false
+        _selectedEpisodes.value = emptySet()
+    }
+
+    fun selectEpisodeForDownload(index: Int): PlaybackSession? {
+        val info = vodInfo ?: return null
+        val list = info.seriesMap?.get(info.playFlag) ?: return null
+        if (index !in list.indices) return null
+        commitVodInfo(info.copy(playIndex = index))
+        exitEpisodeSelect()
+        return preparePlaySession()
     }
 
     private fun retryDetailOnce(reason: String): Boolean {

@@ -36,6 +36,7 @@ import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -571,9 +572,16 @@ private fun PillAction(iconRes: Int, text: String, onClick: () -> Unit) {
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalFoundationApi::class)
 @Composable
-internal fun EpisodeSheet(vm: DetailViewModel, slideFromEnd: Boolean, showQuality: Boolean) {
+internal fun EpisodeSheet(
+    vm: DetailViewModel,
+    slideFromEnd: Boolean,
+    showQuality: Boolean,
+    onDownloadSelected: (List<Int>) -> Unit = {},
+) {
     val vodUi by vm.vodUi.collectAsState()
     val show by vm.episodeSheet.collectAsState()
+    val selectMode by vm.episodeSelectMode.collectAsState()
+    val selectedEpisodes by vm.selectedEpisodes.collectAsState()
     if (!show) return
     val info = vodUi?.info ?: return
     val currentFlag = info.playFlag
@@ -686,11 +694,16 @@ internal fun EpisodeSheet(vm: DetailViewModel, slideFromEnd: Boolean, showQualit
                 verticalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 gridItemsIndexed(episodes) { index, ep ->
+                    val checked = if (selectMode) selectedEpisodes.contains(index) else index == playIndex
                     FilterChip(
-                        selected = index == playIndex,
+                        selected = checked,
                         onClick = {
-                            vm.onEpisodeClick(index)
-                            dismissAnimated()
+                            if (selectMode) {
+                                vm.toggleEpisodeSelect(index)
+                            } else {
+                                vm.onEpisodeClick(index)
+                                dismissAnimated()
+                            }
                         },
                         modifier = Modifier
                             .fillMaxWidth()
@@ -710,6 +723,38 @@ internal fun EpisodeSheet(vm: DetailViewModel, slideFromEnd: Boolean, showQualit
                         shape = RoundedCornerShape(12.dp),
                         colors = MaterialTheme.colorScheme.filterChipColors(),
                     )
+                }
+            }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 12.dp, vertical = 6.dp),
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                if (!selectMode) {
+                    TextButton(onClick = { vm.startEpisodeSelect(playIndex.coerceAtLeast(0)) }) {
+                        Text(stringResource(R.string.download_batch_select))
+                    }
+                } else {
+                    TextButton(onClick = { vm.selectAllEpisodes() }) {
+                        Text(stringResource(R.string.download_batch_all))
+                    }
+                    Spacer(Modifier.weight(1f))
+                    TextButton(onClick = { vm.exitEpisodeSelect() }) {
+                        Text(stringResource(R.string.download_batch_cancel))
+                    }
+                    TextButton(onClick = {
+                        val indices = selectedEpisodes.sorted()
+                        if (indices.isNotEmpty()) {
+                            onDownloadSelected(indices)
+                            vm.exitEpisodeSelect()
+                            dismissAnimated()
+                        }
+                    }) {
+                        Text(
+                            stringResource(R.string.download_batch_download_n, selectedEpisodes.size),
+                        )
+                    }
                 }
             }
         }

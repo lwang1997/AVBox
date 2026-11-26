@@ -15,6 +15,13 @@ import android.widget.FrameLayout
 import android.widget.Toast
 import com.github.avbox.osc.R
 import com.github.avbox.osc.bean.CastVideo
+import com.github.avbox.osc.bean.DownloadKind
+import com.github.avbox.osc.bean.DownloadRequest
+import com.github.avbox.osc.bean.DownloadResolvedUrl
+import com.github.avbox.osc.bean.VodInfo
+import com.github.avbox.osc.download.DownloadManager
+import com.github.avbox.osc.download.DownloadStorage
+import com.github.avbox.osc.download.ExternalDownloader
 import com.github.avbox.osc.player.ExoPlayer
 import com.github.avbox.osc.player.PlayerKernelView
 import com.github.avbox.osc.player.PageHost
@@ -33,10 +40,12 @@ import com.github.avbox.osc.player.engine.MediaSources
 import com.github.avbox.osc.player.controller.PlayerControlApi
 import com.github.avbox.osc.player.danmu.DanmuLoadController
 import com.github.avbox.osc.player.state.CastSheetState
+import com.github.avbox.osc.player.state.DownloadSheetState
 import com.github.avbox.osc.player.state.PlayerUiState
 import com.github.avbox.osc.player.core.PlayState
 import com.github.avbox.osc.util.HistoryHelper
 import com.github.avbox.osc.util.AppLog
+import com.github.avbox.osc.util.PermissionHelper
 import me.jessyan.autosize.AutoSize
 import me.jessyan.autosize.internal.CustomAdapt
 import java.util.HashMap
@@ -49,6 +58,9 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withTimeoutOrNull
 
 private const val CAST_URL_WAIT_MS = 5_000L
+
+/** 下载解析可能要等源站接口，比投屏等待更宽松。 */
+private const val DOWNLOAD_URL_WAIT_MS = 20_000L
 
 class PlayContainer(activity: Activity) : FrameLayout(activity), CustomAdapt, PlaybackHostApi, PlaybackPage {
 
@@ -300,6 +312,7 @@ class PlayContainer(activity: Activity) : FrameLayout(activity), CustomAdapt, Pl
         val controller = VideoPlayerController(activity)
         controller.setPlayerContent { PlayerSurfaceHost(controller) }
         playerController = controller
+        controller.downloadRequestHandler = { showDownloadSheetForCurrent() }
         controller.onVideoSizeReady = { width, height ->
             if (VideoOrientation.isUsableSize(width, height)) {
                 notifyVideoSizeReady(VideoOrientation.isPortrait(width, height))
@@ -319,6 +332,153 @@ class PlayContainer(activity: Activity) : FrameLayout(activity), CustomAdapt, Pl
     override fun showCast() {
         showCastDialog()
     }
+
+    fun showDownloadSheetForCurrent() {
+        val webUrl = scheduler.webPlayUrl()
+        if (TextUtils.isEmpty(webUrl)) {
+            Toast.makeText(hostContext, hostContext.getString(R.string.toast_no_cast_url), Toast.LENGTH_SHORT).show()
+            return
+        }
+        if (!isAttached()) return
+        val url = scheduler.getCastUrl(webUrl)
+        if (url.isNullOrEmpty()) {
+            Toast.makeText(hostContext, hostContext.getString(R.string.toast_no_cast_url), Toast.LENGTH_SHORT).show()
+            return
+        }
+        val headers = scheduler.resolvedHeaders() ?: scheduler.webHeaderMap()
+        val vod = scheduler.vod()
+        val series = vod?.seriesMap?.get(vod.playFlag)?.getOrNull(vod.playIndex)
+        val ext = DownloadStorage.extensionFromUrl(url) ?: "mp4"
+        val fileName = DownloadStorage.buildFileName(vod?.name, series?.name, castTitle(), ext)
+        val targets = ExternalDownloader.installedTargets(hostContext)
+        val uiState = playerController.getUiState()
+        uiState.openDownloadSheet(
+            DownloadSheetState(
+                title = vod?.name ?: castTitle(),
+                episodeName = series?.name.orEmpty(),
+                fileName = fileName,
+                kindLabel = if (isHlsUrl(url)) {
+                    hostContext.getString(R.string.download_kind_hls)
+                } else {
+                    hostContext.getString(R.string.download_kind_direct)
+                },
+                url = url,
+                headers = headers?.toMap() ?: emptyMap(),
+                idmAvailable = targets.isNotEmpty(),
+                onStartBuiltin = {
+                    PermissionHelper.requestNotificationIfNeeded(attachedActivity)
+                    enqueueDownload(vod, series, url, headers, fileName)
+                    uiState.dismissDownloadSheet()
+                },
+                onStartIdm = {
+                    val target = targets.firstOrNull()
+                    if (target == null) {
+                        Toast.makeText(
+                            hostContext,
+                            hostContext.getString(R.string.download_idm_not_installed),
+                            Toast.LENGTH_SHORT,
+                        ).show()
+                    } else if (ExternalDownloader.launch(hostContext, url, fileName, target)) {
+                        Toast.makeText(
+                            hostContext,
+                            hostContext.getString(R.string.download_idm_launched),
+                            Toast.LENGTH_SHORT,
+                        ).show()
+                    } else {
+                        Toast.makeText(
+                            hostContext,
+                            hostContext.getString(R.string.download_idm_failed),
+                            Toast.LENGTH_SHORT,
+                        ).show()
+                    }
+                    uiState.dismissDownloadSheet()
+                },
+                onCopy = {
+                    ExternalDownloader.copy(
+                        hostContext,
+                        ExternalDownloader.headerText(url, headers ?: emptyMap()),
+                    )
+                    Toast.makeText(
+                        hostContext,
+                        hostContext.getString(R.string.download_copy_link),
+                        Toast.LENGTH_SHORT,
+                    ).show()
+                },
+            ),
+        )
+        if (isHlsUrl(url)) {
+            scope.launch {
+                val separate = DownloadManager.hlsHasSeparateAudio(url, headers ?: emptyMap())
+                if (!separate) return@launch
+                val current = uiState.downloadSheet
+                if (current == null || current.url != url) return@launch
+                uiState.openDownloadSheet(
+                    current.copy(
+                        warning = hostContext.getString(R.string.download_separate_audio_warning),
+                    ),
+                )
+            }
+        }
+    }
+
+    private fun enqueueDownload(
+        vod: VodInfo?,
+        series: VodInfo.VodSeries?,
+        url: String,
+        headers: HashMap<String, String>?,
+        fileName: String,
+    ) {
+        scope.launch {
+            runCatching {
+                DownloadManager.enqueue(
+                    DownloadRequest(
+                        url = url,
+                        headers = headers ?: emptyMap(),
+                        kindHint = if (isHlsUrl(url)) DownloadKind.HLS else null,
+                        title = castTitle(),
+                        fileName = fileName,
+                        sourceKey = vod?.sourceKey,
+                        vodId = vod?.id,
+                        vodName = vod?.name,
+                        playFlag = vod?.playFlag,
+                        episodeIndex = vod?.playIndex ?: 0,
+                        episodeName = series?.name,
+                        rawSeriesUrl = series?.url,
+                    ),
+                )
+            }.onSuccess {
+                Toast.makeText(
+                    hostContext,
+                    hostContext.getString(R.string.download_added),
+                    Toast.LENGTH_SHORT,
+                ).show()
+            }.onFailure {
+                AppLog.e("DownloadManager", it)
+                Toast.makeText(
+                    hostContext,
+                    hostContext.getString(R.string.download_add_failed),
+                    Toast.LENGTH_SHORT,
+                ).show()
+            }
+        }
+    }
+
+    suspend fun resolveForDownload(session: PlaybackSession): DownloadResolvedUrl? {
+        cancelCastWait()
+        beginCastPrepare()
+        setData(session)
+        val url = withTimeoutOrNull(DOWNLOAD_URL_WAIT_MS) {
+            scheduler.webPlayUrlFlow.first { !it.isNullOrEmpty() }
+        }
+        val headers = scheduler.resolvedHeaders() ?: scheduler.webHeaderMap()
+        endCastPrepare()
+        clearCastAbort()
+        if (url.isNullOrEmpty()) return null
+        return DownloadResolvedUrl(url, headers?.toMap() ?: emptyMap())
+    }
+
+    private fun isHlsUrl(url: String): Boolean =
+        url.substringBefore('?').substringBefore('#').endsWith(".m3u8", ignoreCase = true)
 
     fun showCastDialog() {
         if (MediaSources.isoHeaders(scheduler.webHeaderMap())) {

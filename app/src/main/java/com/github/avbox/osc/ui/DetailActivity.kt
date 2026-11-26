@@ -22,10 +22,20 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ViewModelProvider
+import androidx.lifecycle.lifecycleScope
 import com.github.avbox.osc.R
+import com.github.avbox.osc.bean.DownloadKind
+import com.github.avbox.osc.bean.DownloadRequest
+import com.github.avbox.osc.download.DownloadManager
+import com.github.avbox.osc.download.DownloadSettings
+import com.github.avbox.osc.download.DownloadStorage
+import com.github.avbox.osc.download.DownloaderTarget
+import com.github.avbox.osc.download.ExternalDownloader
 import com.github.avbox.osc.ui.base.BaseActivity
 import com.github.avbox.osc.bean.VodInfo
 import com.github.avbox.osc.ui.components.SheetHostScaffold
+import com.github.avbox.osc.ui.download.DownloadMethodPrompt
+import com.github.avbox.osc.ui.download.IdmHeaderConfirmPrompt
 import com.github.avbox.osc.player.PageHost
 import com.github.avbox.osc.player.PictureInPictureHelper
 import com.github.avbox.osc.player.PlaybackController
@@ -41,6 +51,10 @@ import com.github.avbox.osc.util.AppLog
 import com.github.avbox.osc.util.PermissionHelper
 import com.github.avbox.osc.util.SpiderStorageNotice
 import java.util.concurrent.atomic.AtomicBoolean
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.suspendCancellableCoroutine
+import kotlin.coroutines.resume
 
 private const val SYSBAR_APPEARANCE_REASSERT_DELAY_MS = 400L
 
@@ -64,6 +78,18 @@ class DetailActivity : BaseActivity(), PageHost {
     private var appliedFullscreen = false
     private var pendingEpisodeSync = false
     private var videoSizeWatchArmed = false
+
+    /** 详情页批量下载只借用播放内核解析地址，解析期间隐藏小窗播放器。 */
+    var playContainerHidden by mutableStateOf(false)
+        private set
+
+    /** 详情页下载方式选择弹窗；null 表示无待选择项。 */
+    internal var downloadMethodPrompt by mutableStateOf<DownloadMethodPrompt?>(null)
+        private set
+
+    /** 已选外部下载器但链接需要请求头时的二次确认。 */
+    internal var idmHeaderConfirmPrompt by mutableStateOf<IdmHeaderConfirmPrompt?>(null)
+        private set
 
     private val localSubtitlePicker = registerForActivityResult(
         ActivityResultContracts.OpenDocument()
@@ -482,6 +508,142 @@ class DetailActivity : BaseActivity(), PageHost {
         }
         container.setData(session)
         container.beginCastWait()
+    }
+
+    fun startEpisodeDownload(indices: List<Int>) {
+        if (indices.isEmpty()) return
+        val engine = PlaybackService.peek()
+        // 只在“真的正在播放”时拦截；暂停/已结束/仅解析会话都允许下载。
+        if (engine != null && !engine.isReleased() && engine.headlessBridge().isPlaying()) {
+            Toast.makeText(this, getString(R.string.download_requires_stop_playback), Toast.LENGTH_SHORT).show()
+            return
+        }
+        val targets = ExternalDownloader.installedTargets(this)
+        val idmAvailable = indices.size == 1 && targets.isNotEmpty()
+        when {
+            idmAvailable && DownloadSettings.method == DownloadSettings.METHOD_ASK -> {
+                downloadMethodPrompt = DownloadMethodPrompt(targets.first().label) { choice ->
+                    downloadMethodPrompt = null
+                    if (choice != DownloadMethodPrompt.METHOD_CANCEL) {
+                        beginEpisodeDownload(indices, choice, targets)
+                    }
+                }
+            }
+            idmAvailable && DownloadSettings.method == DownloadSettings.METHOD_IDM ->
+                beginEpisodeDownload(indices, DownloadSettings.METHOD_IDM, targets)
+            else -> beginEpisodeDownload(indices, DownloadSettings.METHOD_BUILTIN, targets)
+        }
+    }
+
+    private fun beginEpisodeDownload(
+        indices: List<Int>,
+        method: Int,
+        targets: List<DownloaderTarget>,
+    ) {
+        PermissionHelper.requestNotificationIfNeeded(this)
+        playContainerHidden = true
+        val container = ensurePlayContainer()
+        lifecycleScope.launch {
+            try {
+                runDownloadBatch(container, indices, method, targets)
+            } finally {
+                if (playContainer === container && !container.hasClaimedPlayback()) {
+                    closeInlinePlayer()
+                }
+                playContainerHidden = false
+            }
+        }
+    }
+
+    private suspend fun askIdmWithHeaders(): Boolean = suspendCancellableCoroutine { cont ->
+        idmHeaderConfirmPrompt = IdmHeaderConfirmPrompt { keepIdm ->
+            idmHeaderConfirmPrompt = null
+            if (cont.isActive) cont.resume(keepIdm)
+        }
+        cont.invokeOnCancellation { idmHeaderConfirmPrompt = null }
+    }
+
+    private suspend fun runDownloadBatch(
+        container: PlayContainer,
+        indices: List<Int>,
+        method: Int,
+        targets: List<DownloaderTarget>,
+    ) {
+        var added = 0
+        var failed = 0
+        indices.forEachIndexed { position, index ->
+            val session = vm.selectEpisodeForDownload(index)
+            val resolved = if (session == null) null else container.resolveForDownload(session)
+            if (session == null || resolved == null) {
+                failed++
+            } else {
+                val vod = session.vod()
+                val series = vod.seriesMap?.get(vod.playFlag)?.getOrNull(vod.playIndex)
+                var useIdm = method == DownloadSettings.METHOD_IDM
+                if (useIdm && resolved.headers.isNotEmpty()) {
+                    useIdm = askIdmWithHeaders()
+                }
+                var handled = false
+                if (useIdm) {
+                    val ext = DownloadStorage.extensionFromUrl(resolved.url) ?: "mp4"
+                    val fileName = DownloadStorage.buildFileName(vod.name, series?.name, vod.name, ext)
+                    handled = ExternalDownloader.launch(
+                        this@DetailActivity,
+                        resolved.url,
+                        fileName,
+                        targets.first(),
+                    )
+                }
+                if (!handled) {
+                    runCatching {
+                        DownloadManager.enqueue(
+                            DownloadRequest(
+                                url = resolved.url,
+                                headers = resolved.headers,
+                                kindHint = if (resolved.url.substringBefore('?')
+                                        .substringBefore('#')
+                                        .endsWith(".m3u8", ignoreCase = true)
+                                ) {
+                                    DownloadKind.HLS
+                                } else {
+                                    null
+                                },
+                                title = vod.name ?: "",
+                                fileName = null,
+                                sourceKey = session.sourceKey(),
+                                vodId = vod.id,
+                                vodName = vod.name,
+                                playFlag = vod.playFlag,
+                                episodeIndex = vod.playIndex,
+                                episodeName = series?.name,
+                                rawSeriesUrl = series?.url,
+                            ),
+                        )
+                        added++
+                    }.onFailure {
+                        AppLog.e("DownloadManager", it)
+                        failed++
+                    }
+                } else {
+                    added++
+                }
+            }
+            if (position < indices.lastIndex) delay(1200)
+        }
+        if (added > 0) {
+            Toast.makeText(
+                this@DetailActivity,
+                getString(R.string.download_added_n, added),
+                Toast.LENGTH_SHORT,
+            ).show()
+        }
+        if (failed > 0) {
+            Toast.makeText(
+                this@DetailActivity,
+                getString(R.string.download_resolve_failed, failed),
+                Toast.LENGTH_SHORT,
+            ).show()
+        }
     }
 
     fun musicPlaybackDetected(): Boolean {

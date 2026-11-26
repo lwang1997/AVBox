@@ -15,6 +15,7 @@ import com.github.catvod.crawler.JsLoader
 import com.github.avbox.osc.BuildConfig
 import com.github.avbox.osc.boot.BootGuard
 import com.github.avbox.osc.data.AppDataManager
+import com.github.avbox.osc.download.DownloadManager
 import com.github.avbox.osc.io.FileUtils
 import com.github.avbox.osc.net.HttpClients
 import com.github.avbox.osc.server.ControlManager
@@ -70,6 +71,8 @@ class App : Application() {
         bootMark("controlManager")
         Probe.trace("boot:appDataManager") { AppDataManager.init() }
         bootMark("appDataManager")
+        Probe.trace("boot:downloadManager") { DownloadManager.bootstrap() }
+        bootMark("downloadManager")
         Probe.trace("boot:autoSize") {
             AutoSizeConfig.getInstance().setCustomFragment(true).unitsManager
                 .setSupportDP(false)

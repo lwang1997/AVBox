@@ -135,6 +135,20 @@ private fun PlaybackParams(
                 modifier = Modifier.fillMaxWidth(),
             )
         }
+        sheet.onDownloadClicked?.let { onDownload ->
+            Spacer(Modifier.height(playerDim(R.dimen.vs_30)))
+            SheetButton(
+                text = stringResource(R.string.player_download_current),
+                iconRes = R.drawable.ic_download,
+                onClick = {
+                    dismissThen {
+                        onDownload()
+                        onDismiss()
+                    }
+                },
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
     }
 }
 

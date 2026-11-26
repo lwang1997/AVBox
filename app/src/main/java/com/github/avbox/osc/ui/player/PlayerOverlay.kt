@@ -148,6 +148,10 @@ fun PlayerOverlay(
             )
         }
 
+        state.downloadSheet?.let { sheet ->
+            DownloadSheet(sheet) { state.dismissDownloadSheet() }
+        }
+
         state.danmuSettingSheet?.let { sheet ->
             DanmuSettingSheet(sheet) { state.dismissDanmuSettingSheet() }
         }

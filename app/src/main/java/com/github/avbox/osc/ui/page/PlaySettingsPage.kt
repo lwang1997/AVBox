@@ -20,6 +20,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.github.avbox.osc.R
+import com.github.avbox.osc.download.DownloadSettings
 import com.github.avbox.osc.player.BasePlayerView
 import com.github.avbox.osc.player.PlaybackService
 import com.github.avbox.osc.player.controller.PlayerTextFormat
@@ -301,6 +302,85 @@ fun PlaySettingsScreen(onNavigateBack: () -> Unit) {
                             if (sliderCacheSize != config.exoCacheSizeMb) {
                                 PlaybackSettingsState.exoCacheSizeMb = sliderCacheSize
                             }
+                        },
+                    )
+                }
+            }
+
+            Spacer(Modifier.height(28.dp))
+
+            var downloadConcurrency by remember { mutableStateOf(DownloadSettings.concurrency) }
+            var downloadMethod by remember { mutableStateOf(DownloadSettings.method) }
+            var downloadWifiOnly by remember { mutableStateOf(DownloadSettings.wifiOnly) }
+            var downloadAutoResume by remember { mutableStateOf(DownloadSettings.autoResume) }
+            var downloadNotify by remember { mutableStateOf(DownloadSettings.notifyCompleted) }
+            SettingsGroup(title = stringResource(R.string.settings_group_download)) {
+                SettingsCard(SettingsCardPosition.FIRST) {
+                    SettingsOptionMenuRow(
+                        title = stringResource(R.string.settings_download_concurrency),
+                        leadingIconRes = R.drawable.ic_download,
+                        valueText = downloadConcurrency.toString(),
+                        options = listOf("1", "2", "3"),
+                        selectedIndex = downloadConcurrency - 1,
+                        onSelect = { idx ->
+                            downloadConcurrency = idx + 1
+                            DownloadSettings.concurrency = downloadConcurrency
+                        },
+                    )
+                }
+                SettingsCard(SettingsCardPosition.MIDDLE) {
+                    SettingsSwitchRow(
+                        title = stringResource(R.string.settings_download_wifi_only),
+                        leadingIconRes = R.drawable.ic_download,
+                        checked = downloadWifiOnly,
+                        onCheckedChange = {
+                            downloadWifiOnly = it
+                            DownloadSettings.wifiOnly = it
+                        },
+                    )
+                }
+                SettingsCard(SettingsCardPosition.MIDDLE) {
+                    SettingsOptionMenuRow(
+                        title = stringResource(R.string.settings_download_method),
+                        leadingIconRes = R.drawable.ic_download,
+                        valueText = stringResource(
+                            when (downloadMethod) {
+                                DownloadSettings.METHOD_BUILTIN -> R.string.download_method_builtin
+                                DownloadSettings.METHOD_IDM -> R.string.download_method_idm
+                                else -> R.string.download_method_ask
+                            },
+                        ),
+                        options = listOf(
+                            stringResource(R.string.download_method_ask),
+                            stringResource(R.string.download_method_builtin),
+                            stringResource(R.string.download_method_idm),
+                        ),
+                        selectedIndex = downloadMethod,
+                        onSelect = { idx ->
+                            downloadMethod = idx
+                            DownloadSettings.method = idx
+                        },
+                    )
+                }
+                SettingsCard(SettingsCardPosition.MIDDLE) {
+                    SettingsSwitchRow(
+                        title = stringResource(R.string.settings_download_auto_resume),
+                        leadingIconRes = R.drawable.ic_download,
+                        checked = downloadAutoResume,
+                        onCheckedChange = {
+                            downloadAutoResume = it
+                            DownloadSettings.autoResume = it
+                        },
+                    )
+                }
+                SettingsCard(SettingsCardPosition.LAST) {
+                    SettingsSwitchRow(
+                        title = stringResource(R.string.settings_download_notify),
+                        leadingIconRes = R.drawable.ic_download,
+                        checked = downloadNotify,
+                        onCheckedChange = {
+                            downloadNotify = it
+                            DownloadSettings.notifyCompleted = it
                         },
                     )
                 }

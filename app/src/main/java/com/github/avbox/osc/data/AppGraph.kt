@@ -21,4 +21,9 @@ object AppGraph {
     val followRepository: FollowRepository by lazy {
         RoomFollowRepository { AppDataManager.get().getVodFollowDao() }
     }
+
+    @JvmStatic
+    val downloadRepository: DownloadRepository by lazy {
+        RoomDownloadRepository { AppDataManager.get().getDownloadTaskDao() }
+    }
 }
