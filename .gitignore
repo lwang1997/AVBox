@@ -61,6 +61,8 @@ captures/
 # Uncomment the following lines if you do not want to check your keystore files in.
 #*.jks
 #*.keystore
+# 本地正式签名材料，不入库
+.key/
 
 # External native build folder generated in Android Studio 2.2 and later
 .externalNativeBuild
