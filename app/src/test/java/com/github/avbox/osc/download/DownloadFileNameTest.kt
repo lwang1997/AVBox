@@ -44,6 +44,14 @@ class DownloadFileNameTest {
     }
 
     @Test
+    fun buildFileNameDoesNotRepeatKnownExtension() {
+        assertEquals("标题.mp4", DownloadStorage.buildFileName(null, null, "标题.mp4", "mp4"))
+        assertEquals("标题.mp4", DownloadStorage.buildFileName(null, null, "标题.ts", "mp4"))
+        // 不是媒体扩展名的点号要保留
+        assertEquals("第1.5集", DownloadStorage.buildFileName(null, null, "第1.5集", ""))
+    }
+
+    @Test
     fun extensionFromUrlHandlesQueryAndFragment() {
         assertEquals("mp4", DownloadStorage.extensionFromUrl("https://a.com/v/x.MP4?token=1#t"))
         assertEquals("ts", DownloadStorage.extensionFromUrl("https://a.com/v/x.ts"))

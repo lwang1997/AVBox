@@ -19,6 +19,8 @@ object DownloadSettings {
         get() = KV.get(KVKeys.DOWNLOAD_WIFI_ONLY, false)
         set(value) {
             KV.put(KVKeys.DOWNLOAD_WIFI_ONLY, value)
+            // 关掉“仅 Wi-Fi”时，队列里可能正躺着一批等网络的任务，立即放行。
+            if (!value) DownloadManager.retryPending()
         }
 
     var method: Int

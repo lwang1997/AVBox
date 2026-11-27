@@ -19,7 +19,9 @@ import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -31,6 +33,7 @@ import com.github.avbox.osc.bean.DownloadStatus
 import com.github.avbox.osc.bean.DownloadTask
 import com.github.avbox.osc.download.DownloadStorage
 import com.github.avbox.osc.ui.components.AppTopBarScaffold
+import com.github.avbox.osc.ui.components.AVBoxAlertDialog
 import com.github.avbox.osc.ui.components.TopBarActionBox
 
 @Composable
@@ -39,7 +42,13 @@ fun DownloadScreen(vm: DownloadViewModel, onNavigateBack: () -> Unit) {
     val context = LocalContext.current
     val active = tasks.filter { it.active }
     val finished = tasks.filter { !it.active }
-    val freeBytes = remember(tasks.size) { DownloadStorage.freeBytes() }
+    val clearable = tasks.count {
+        it.status == DownloadStatus.COMPLETED || it.status == DownloadStatus.CANCELED
+    }
+    // 下载完成或清空后剩余空间要重新读，不能只按任务条数缓存。
+    val freeBytes = remember(tasks.size, clearable) { DownloadStorage.freeBytes() }
+    var pendingDelete by remember { mutableStateOf<DownloadTask?>(null) }
+    var pendingClear by remember { mutableStateOf(false) }
 
     AppTopBarScaffold(
         titleContent = {
@@ -53,7 +62,7 @@ fun DownloadScreen(vm: DownloadViewModel, onNavigateBack: () -> Unit) {
             TopBarActionBox(R.drawable.ic_arrow_left, stringResource(R.string.common_back), onClick = onNavigateBack)
         },
         actions = {
-            TextButton(onClick = { vm.clearCompleted() }) {
+            TextButton(onClick = { if (clearable > 0) pendingClear = true }) {
                 Text(stringResource(R.string.download_clear_completed))
             }
         },
@@ -111,7 +120,7 @@ fun DownloadScreen(vm: DownloadViewModel, onNavigateBack: () -> Unit) {
                             onResume = { vm.resume(task.id) },
                             onCancel = { vm.cancel(task.id) },
                             onRetry = { vm.retry(task.id) },
-                            onDelete = { vm.delete(task.id, true) },
+                            onDelete = { pendingDelete = task },
                             onOpen = { vm.open(context, task) },
                         )
                     }
@@ -131,7 +140,7 @@ fun DownloadScreen(vm: DownloadViewModel, onNavigateBack: () -> Unit) {
                             onResume = { vm.resume(task.id) },
                             onCancel = { vm.cancel(task.id) },
                             onRetry = { vm.retry(task.id) },
-                            onDelete = { vm.delete(task.id, true) },
+                            onDelete = { pendingDelete = task },
                             onOpen = { vm.open(context, task) },
                         )
                     }
@@ -139,6 +148,51 @@ fun DownloadScreen(vm: DownloadViewModel, onNavigateBack: () -> Unit) {
             }
         }
     }
+
+    pendingDelete?.let { task ->
+        AVBoxAlertDialog(
+            onDismissRequest = { pendingDelete = null },
+            title = { Text(stringResource(R.string.download_delete_title)) },
+            text = { Text(stringResource(R.string.download_delete_message, task.fileName)) },
+            dismissButton = {
+                TextButton(onClick = {
+                    pendingDelete = null
+                    vm.delete(task.id, false)
+                }) {
+                    Text(stringResource(R.string.download_delete_record))
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    pendingDelete = null
+                    vm.delete(task.id, true)
+                }) {
+                    Text(stringResource(R.string.download_delete_file))
+                }
+            },
+        )
+    }
+    if (pendingClear) {
+        AVBoxAlertDialog(
+            onDismissRequest = { pendingClear = false },
+            title = { Text(stringResource(R.string.download_clear_title)) },
+            text = { Text(stringResource(R.string.download_clear_message, clearable)) },
+            dismissButton = {
+                TextButton(onClick = { pendingClear = false }) {
+                    Text(stringResource(R.string.download_batch_cancel))
+                }
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    pendingClear = false
+                    vm.clearCompleted()
+                }) {
+                    Text(stringResource(R.string.download_delete_file))
+                }
+            },
+        )
+    }
+
 }
 
 @Composable
@@ -195,6 +249,14 @@ private fun DownloadItemCard(
                     )
                 }
             }
+            if (task.status == DownloadStatus.DOWNLOADING && task.speedBytesPerSec > 0) {
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    text = speedText(task),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
                 when (task.status) {
                     DownloadStatus.DOWNLOADING, DownloadStatus.MERGING, DownloadStatus.QUEUED -> {
@@ -219,6 +281,33 @@ private fun DownloadItemCard(
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun speedText(task: DownloadTask): String {
+    val speed = formatBytes(task.speedBytesPerSec)
+    if (task.speedBytesPerSec <= 0) return speed
+    val remaining = task.totalBytes - task.downloadedBytes
+    return if (remaining > 0) {
+        stringResource(
+            R.string.download_speed_eta,
+            speed,
+            formatDuration(remaining / task.speedBytesPerSec),
+        )
+    } else {
+        stringResource(R.string.download_speed, speed)
+    }
+}
+
+private fun formatDuration(seconds: Long): String {
+    val hours = seconds / 3600
+    val minutes = (seconds % 3600) / 60
+    val secs = seconds % 60
+    return if (hours > 0) {
+        String.format(java.util.Locale.ROOT, "%d:%02d:%02d", hours, minutes, secs)
+    } else {
+        String.format(java.util.Locale.ROOT, "%d:%02d", minutes, secs)
     }
 }
 

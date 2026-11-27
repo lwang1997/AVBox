@@ -35,7 +35,6 @@ import com.github.avbox.osc.ui.base.BaseActivity
 import com.github.avbox.osc.bean.VodInfo
 import com.github.avbox.osc.ui.components.SheetHostScaffold
 import com.github.avbox.osc.ui.download.DownloadMethodPrompt
-import com.github.avbox.osc.ui.download.IdmHeaderConfirmPrompt
 import com.github.avbox.osc.player.PageHost
 import com.github.avbox.osc.player.PictureInPictureHelper
 import com.github.avbox.osc.player.PlaybackController
@@ -51,10 +50,10 @@ import com.github.avbox.osc.util.AppLog
 import com.github.avbox.osc.util.PermissionHelper
 import com.github.avbox.osc.util.SpiderStorageNotice
 import java.util.concurrent.atomic.AtomicBoolean
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.suspendCancellableCoroutine
-import kotlin.coroutines.resume
 
 private const val SYSBAR_APPEARANCE_REASSERT_DELAY_MS = 400L
 
@@ -66,6 +65,13 @@ private const val PIP_GONE_STRIKES = 2
 
 /** 小窗进出前后这段时间内不做"横屏即全屏"的自动切换（小窗窗口本身是横的）。 */
 private const val PIP_ROTATION_GRACE_MS = 1500L
+
+/** 批量下载解析进度，供详情页展示与取消。 */
+internal data class DownloadBatchState(
+    val current: Int,
+    val total: Int,
+    val onCancel: () -> Unit,
+)
 
 class DetailActivity : BaseActivity(), PageHost {
 
@@ -87,9 +93,11 @@ class DetailActivity : BaseActivity(), PageHost {
     internal var downloadMethodPrompt by mutableStateOf<DownloadMethodPrompt?>(null)
         private set
 
-    /** 已选外部下载器但链接需要请求头时的二次确认。 */
-    internal var idmHeaderConfirmPrompt by mutableStateOf<IdmHeaderConfirmPrompt?>(null)
+    /** 批量下载的解析进度；null 表示当前没有批量任务。 */
+    internal var downloadBatch by mutableStateOf<DownloadBatchState?>(null)
         private set
+
+    private var downloadBatchJob: Job? = null
 
     private val localSubtitlePicker = registerForActivityResult(
         ActivityResultContracts.OpenDocument()
@@ -531,7 +539,20 @@ class DetailActivity : BaseActivity(), PageHost {
             }
             idmAvailable && DownloadSettings.method == DownloadSettings.METHOD_IDM ->
                 beginEpisodeDownload(indices, DownloadSettings.METHOD_IDM, targets)
-            else -> beginEpisodeDownload(indices, DownloadSettings.METHOD_BUILTIN, targets)
+            else -> {
+                // 1DM 每收到一个链接都会自己弹确认框，整季批量交过去体验很差，这里保持内置并说清楚。
+                if (DownloadSettings.method == DownloadSettings.METHOD_IDM &&
+                    indices.size > 1 &&
+                    targets.isNotEmpty()
+                ) {
+                    Toast.makeText(
+                        this,
+                        getString(R.string.download_idm_batch_unsupported),
+                        Toast.LENGTH_SHORT,
+                    ).show()
+                }
+                beginEpisodeDownload(indices, DownloadSettings.METHOD_BUILTIN, targets)
+            }
         }
     }
 
@@ -540,13 +561,32 @@ class DetailActivity : BaseActivity(), PageHost {
         method: Int,
         targets: List<DownloaderTarget>,
     ) {
+        if (downloadBatchJob?.isActive == true) return
         PermissionHelper.requestNotificationIfNeeded(this)
         playContainerHidden = true
-        val container = ensurePlayContainer()
-        lifecycleScope.launch {
+        val container = runCatching { ensurePlayContainer() }.getOrElse { th ->
+            AppLog.e("download-batch", th)
+            playContainerHidden = false
+            Toast.makeText(this, getString(R.string.download_add_failed), Toast.LENGTH_SHORT).show()
+            return
+        }
+        // 每集解析最多等 20 秒，整季批量可能要几分钟；没有进度的话看起来就是“点了没反应”。
+        downloadBatch = DownloadBatchState(1, indices.size) { downloadBatchJob?.cancel() }
+        downloadBatchJob = lifecycleScope.launch {
             try {
                 runDownloadBatch(container, indices, method, targets)
+            } catch (e: CancellationException) {
+                AppLog.i("echo-download-batch canceled")
+            } catch (th: Throwable) {
+                AppLog.e("download-batch", th)
+                Toast.makeText(
+                    this@DetailActivity,
+                    getString(R.string.download_add_failed),
+                    Toast.LENGTH_SHORT,
+                ).show()
             } finally {
+                downloadBatch = null
+                downloadBatchJob = null
                 if (playContainer === container && !container.hasClaimedPlayback()) {
                     closeInlinePlayer()
                 }
@@ -555,13 +595,8 @@ class DetailActivity : BaseActivity(), PageHost {
         }
     }
 
-    private suspend fun askIdmWithHeaders(): Boolean = suspendCancellableCoroutine { cont ->
-        idmHeaderConfirmPrompt = IdmHeaderConfirmPrompt { keepIdm ->
-            idmHeaderConfirmPrompt = null
-            if (cont.isActive) cont.resume(keepIdm)
-        }
-        cont.invokeOnCancellation { idmHeaderConfirmPrompt = null }
-    }
+    private fun isHlsUrl(url: String): Boolean =
+        url.substringBefore('?').substringBefore('#').endsWith(".m3u8", ignoreCase = true)
 
     private suspend fun runDownloadBatch(
         container: PlayContainer,
@@ -569,28 +604,40 @@ class DetailActivity : BaseActivity(), PageHost {
         method: Int,
         targets: List<DownloaderTarget>,
     ) {
+        AppLog.i("echo-download-batch start total=${indices.size} method=$method")
         var added = 0
         var failed = 0
         indices.forEachIndexed { position, index ->
+            downloadBatch = downloadBatch?.copy(current = position + 1)
             val session = vm.selectEpisodeForDownload(index)
-            val resolved = if (session == null) null else container.resolveForDownload(session)
+            val resolved = if (session == null) {
+                null
+            } else {
+                // 单集解析出错不该让整批任务悄悄中止。
+                runCatching { container.resolveForDownload(session) }
+                    .onFailure { AppLog.e("download-batch", it) }
+                    .getOrNull()
+            }
+            AppLog.i("echo-download-batch episode=$index resolved=${resolved != null}")
             if (session == null || resolved == null) {
                 failed++
             } else {
                 val vod = session.vod()
                 val series = vod.seriesMap?.get(vod.playFlag)?.getOrNull(vod.playIndex)
-                var useIdm = method == DownloadSettings.METHOD_IDM
-                if (useIdm && resolved.headers.isNotEmpty()) {
-                    useIdm = askIdmWithHeaders()
-                }
                 var handled = false
-                if (useIdm) {
-                    val ext = DownloadStorage.extensionFromUrl(resolved.url) ?: "mp4"
+                if (method == DownloadSettings.METHOD_IDM) {
+                    // HLS 交给 1DM 会被合并成视频，扩展名不能沿用 .m3u8。
+                    val ext = if (isHlsUrl(resolved.url)) {
+                        "mp4"
+                    } else {
+                        DownloadStorage.extensionFromUrl(resolved.url) ?: "mp4"
+                    }
                     val fileName = DownloadStorage.buildFileName(vod.name, series?.name, vod.name, ext)
                     handled = ExternalDownloader.launch(
                         this@DetailActivity,
                         resolved.url,
                         fileName,
+                        resolved.headers,
                         targets.first(),
                     )
                 }
@@ -600,14 +647,7 @@ class DetailActivity : BaseActivity(), PageHost {
                             DownloadRequest(
                                 url = resolved.url,
                                 headers = resolved.headers,
-                                kindHint = if (resolved.url.substringBefore('?')
-                                        .substringBefore('#')
-                                        .endsWith(".m3u8", ignoreCase = true)
-                                ) {
-                                    DownloadKind.HLS
-                                } else {
-                                    null
-                                },
+                                kindHint = if (isHlsUrl(resolved.url)) DownloadKind.HLS else null,
                                 title = vod.name ?: "",
                                 fileName = null,
                                 sourceKey = session.sourceKey(),
@@ -630,6 +670,7 @@ class DetailActivity : BaseActivity(), PageHost {
             }
             if (position < indices.lastIndex) delay(1200)
         }
+        AppLog.i("echo-download-batch done added=$added failed=$failed")
         if (added > 0) {
             Toast.makeText(
                 this@DetailActivity,

@@ -365,6 +365,7 @@ class PlayContainer(activity: Activity) : FrameLayout(activity), CustomAdapt, Pl
                 url = url,
                 headers = headers?.toMap() ?: emptyMap(),
                 idmAvailable = targets.isNotEmpty(),
+                externalLabel = targets.firstOrNull()?.label.orEmpty(),
                 onStartBuiltin = {
                     PermissionHelper.requestNotificationIfNeeded(attachedActivity)
                     enqueueDownload(vod, series, url, headers, fileName)
@@ -372,24 +373,24 @@ class PlayContainer(activity: Activity) : FrameLayout(activity), CustomAdapt, Pl
                 },
                 onStartIdm = {
                     val target = targets.firstOrNull()
-                    if (target == null) {
-                        Toast.makeText(
+                    val started = target != null &&
+                        ExternalDownloader.launch(
                             hostContext,
-                            hostContext.getString(R.string.download_idm_not_installed),
-                            Toast.LENGTH_SHORT,
-                        ).show()
-                    } else if (ExternalDownloader.launch(hostContext, url, fileName, target)) {
+                            url,
+                            fileName,
+                            headers?.toMap() ?: emptyMap(),
+                            target,
+                        )
+                    if (started) {
                         Toast.makeText(
                             hostContext,
                             hostContext.getString(R.string.download_idm_launched),
                             Toast.LENGTH_SHORT,
                         ).show()
                     } else {
-                        Toast.makeText(
-                            hostContext,
-                            hostContext.getString(R.string.download_idm_failed),
-                            Toast.LENGTH_SHORT,
-                        ).show()
+                        // 外部下载器没接住（被卸载、组件改名等），直接转内置，别让用户点了没反应。
+                        PermissionHelper.requestNotificationIfNeeded(attachedActivity)
+                        enqueueDownload(vod, series, url, headers, fileName)
                     }
                     uiState.dismissDownloadSheet()
                 },

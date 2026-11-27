@@ -54,6 +54,8 @@ object M3u8 {
     }
 
     @JvmStatic
+    // 净化会改写对象级 currentAdCount / enhancedMode，并发调用（多任务同时下载）必须串行。
+    @Synchronized
     fun purify(tsUrlPre: String, m3u8content: String?, enhanced: Boolean = false): String? {
         val start = System.currentTimeMillis()
         currentAdCount = 0

@@ -21,11 +21,20 @@ object DownloadStorage {
 
     private const val ROOT_DIR = "AVBox"
     private const val DOWNLOAD_ROOT = "Download"
+    private const val TEMP_DIR = "download"
 
-    fun tempDir(taskId: String): File {
+    fun tempDir(taskId: String): File = File(tempRoot(), taskId)
+
+    /**
+     * 未完成的分段放在 files 下，不放 cacheDir：
+     * “设置 → 清理缓存”会删空 cacheDir，系统低存储时也会回收 cache，放那里等于随时丢掉已下载的分段。
+     */
+    private fun tempRoot(): File {
         val ctx = AppContextHolder.context()
-        val base = ctx?.cacheDir ?: File(System.getProperty("java.io.tmpdir") ?: ".")
-        return File(File(base, "download"), taskId)
+        val base = ctx?.getExternalFilesDir(null)
+            ?: ctx?.filesDir
+            ?: File(System.getProperty("java.io.tmpdir") ?: ".")
+        return File(base, TEMP_DIR)
     }
 
     fun sanitizeName(raw: String?): String {
@@ -41,7 +50,7 @@ object DownloadStorage {
     fun buildFileName(vodName: String?, episodeName: String?, title: String?, ext: String): String {
         val vod = sanitizeName(vodName)
         val ep = sanitizeName(episodeName)
-        val fallback = sanitizeName(title)
+        val fallback = stripKnownExtension(sanitizeName(title))
         val base = when {
             vod.isNotEmpty() && vod != "download" && ep.isNotEmpty() && ep != "download" -> "$vod - $ep"
             vod.isNotEmpty() && vod != "download" -> vod
@@ -50,6 +59,14 @@ object DownloadStorage {
         }
         val suffix = if (ext.isBlank()) "" else "." + ext.trimStart('.')
         return sanitizeName(base) + suffix
+    }
+
+    /** “标题.mp4” 再补一个 .mp4 会变成双重扩展名，拼名字前先去掉已知的媒体扩展名。 */
+    private fun stripKnownExtension(name: String): String {
+        val dot = name.lastIndexOf('.')
+        if (dot <= 0 || dot == name.lastIndex) return name
+        val candidate = name.substring(dot + 1)
+        return if (mimeForExtension(candidate) != "application/octet-stream") name.substring(0, dot) else name
     }
 
     fun extensionFromUrl(url: String?): String? {
@@ -69,8 +86,12 @@ object DownloadStorage {
         "video/x-matroska" -> "mkv"
         "video/webm" -> "webm"
         "video/3gpp" -> "3gp"
+        "video/x-msvideo" -> "avi"
+        "video/quicktime" -> "mov"
         "audio/mpeg" -> "mp3"
         "audio/aac" -> "aac"
+        "audio/mp4" -> "m4a"
+        "audio/flac" -> "flac"
         "application/vnd.apple.mpegurl", "application/x-mpegurl" -> "m3u8"
         else -> null
     }
@@ -82,8 +103,12 @@ object DownloadStorage {
         "ts" -> "video/mp2t"
         "webm" -> "video/webm"
         "3gp" -> "video/3gpp"
+        "avi" -> "video/x-msvideo"
+        "mov" -> "video/quicktime"
         "mp3" -> "audio/mpeg"
         "aac" -> "audio/aac"
+        "m4a" -> "audio/mp4"
+        "flac" -> "audio/flac"
         "m3u8" -> "application/vnd.apple.mpegurl"
         else -> "application/octet-stream"
     }

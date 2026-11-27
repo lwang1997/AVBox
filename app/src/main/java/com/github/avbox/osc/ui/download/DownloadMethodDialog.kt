@@ -28,39 +28,6 @@ internal class DownloadMethodPrompt(
     }
 }
 
-/**
- * 用户明确选择外部下载器、但链接需要请求头时的二次确认。
- */
-internal class IdmHeaderConfirmPrompt(
-    private val onPick: (Boolean) -> Unit,
-) {
-    fun useIdm() = onPick(true)
-
-    fun useBuiltin() = onPick(false)
-}
-
-@Composable
-internal fun IdmHeaderConfirmDialog(
-    onContinueIdm: () -> Unit,
-    onUseBuiltin: () -> Unit,
-) {
-    AVBoxAlertDialog(
-        onDismissRequest = onUseBuiltin,
-        title = { Text(stringResource(R.string.download_header_dialog_title)) },
-        text = { Text(stringResource(R.string.download_header_dialog_message)) },
-        dismissButton = {
-            TextButton(onClick = onUseBuiltin) {
-                Text(stringResource(R.string.download_method_builtin))
-            }
-        },
-        confirmButton = {
-            TextButton(onClick = onContinueIdm) {
-                Text(stringResource(R.string.download_still_idm))
-            }
-        },
-    )
-}
-
 @Composable
 internal fun DownloadMethodDialog(
     idmLabel: String,

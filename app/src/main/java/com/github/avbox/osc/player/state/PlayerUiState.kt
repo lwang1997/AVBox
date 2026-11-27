@@ -576,6 +576,8 @@ data class DownloadSheetState(
     val onStartIdm: () -> Unit,
     val onCopy: () -> Unit,
     val warning: String? = null,
+    /** 实际安装的外部下载器名字（1DM / 1DM+ / 1DM Lite），用于按钮与提示文案。 */
+    val externalLabel: String = "",
 )
 
 class PictureParamsState(

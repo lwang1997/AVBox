@@ -52,12 +52,15 @@ internal object HlsDownloader {
         var playlistUrl = task.url
         var content = DownloadHttp.fetchText(playlistUrl, task.headers)
         var playlist = HlsPlaylistParser.parse(content, playlistUrl)
+        // 主列表里声明了独立音轨时，切到清晰度子列表后这个标记会丢，单独记下来。
+        var separateAudio = playlist.hasSeparateAudio
         if (playlist.master) {
             val best = playlist.variants.maxByOrNull { it.bandwidth }
                 ?: throw DownloadException(DownloadErrorKind.UNSUPPORTED, "没有可用清晰度")
             playlistUrl = best.uri
             content = DownloadHttp.fetchText(playlistUrl, task.headers)
             playlist = HlsPlaylistParser.parse(content, playlistUrl)
+            separateAudio = separateAudio || playlist.hasSeparateAudio
         }
         if (playlist.master) {
             throw DownloadException(DownloadErrorKind.UNSUPPORTED, "无法解析多级播放列表")
@@ -68,9 +71,17 @@ internal object HlsDownloader {
         if (KV.get(KVKeys.M3U8_PURIFY, false)) {
             content = purifyIfNeeded(content, playlistUrl, task.headers)
             playlist = HlsPlaylistParser.parse(content, playlistUrl)
+            separateAudio = separateAudio || playlist.hasSeparateAudio
             if (playlist.live) {
                 throw DownloadException(DownloadErrorKind.UNSUPPORTED, "直播流不支持内置下载")
             }
+        }
+        if (separateAudio) {
+            // 音轨在另一个播放列表里，内置下载只会拼出视频分片，产出无声文件。
+            throw DownloadException(
+                DownloadErrorKind.UNSUPPORTED,
+                "该 HLS 使用独立音轨，内置下载会没有声音",
+            )
         }
         playlist.segments.forEach { segment ->
             val method = segment.key?.method ?: return@forEach
@@ -103,8 +114,17 @@ internal object HlsDownloader {
         }
 
         val total = playlist.segments.size
-        var done = playlist.segments.count { segmentFile(dir, it.index).length() > 0L }
+        var done = 0
+        var existingBytes = 0L
+        playlist.segments.forEach { segment ->
+            val length = segmentFile(dir, segment.index).length()
+            if (length > 0L) done++
+            existingBytes += length
+        }
+        // 续传时进度要带上已经落盘的分段，否则暂停再继续会把已下载的几百 MB 归零。
+        val resumedBytes = existingBytes
         onSegments(done, total)
+        onProgress(resumedBytes, 0L)
         val lock = Any()
         val bytesLocked = java.util.concurrent.atomic.AtomicLong(0L)
         val segmentFiles = arrayOfNulls<File>(total)
@@ -122,9 +142,10 @@ internal object HlsDownloader {
                             done++
                             done
                         }
-                        bytesLocked.addAndGet(segmentFiles[segment.index]?.length() ?: 0L)
+                        val size = segmentFiles[segment.index]?.length() ?: 0L
+                        bytesLocked.addAndGet(size)
                         onSegments(nowDone, total)
-                        onProgress(bytesLocked.get(), 0L)
+                        onProgress(resumedBytes + bytesLocked.get(), 0L)
                     }
                 }
             }.awaitAll()

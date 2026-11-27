@@ -22,6 +22,32 @@ interface DownloadTaskDao {
     @Query("delete from download_task where id=:id")
     suspend fun delete(id: String)
 
-    @Query("update download_task set status=:status, updatedAt=:now where id=:id")
-    suspend fun updateStatus(id: String, status: String, now: Long)
+    @Query(
+        "update download_task set status=:status, error=:error, errorKind=:errorKind, " +
+            "updatedAt=:updatedAt where id=:id",
+    )
+    suspend fun updateStatus(
+        id: String,
+        status: String,
+        error: String?,
+        errorKind: String?,
+        updatedAt: Long,
+    )
+
+    @Query("update download_task set kind=:kind where id=:id")
+    suspend fun updateKind(id: String, kind: String)
+
+    @Query(
+        "update download_task set downloadedBytes=:downloadedBytes, totalBytes=:totalBytes, " +
+            "segmentsDone=:segmentsDone, segmentsTotal=:segmentsTotal, updatedAt=:updatedAt " +
+            "where id=:id and status='DOWNLOADING'",
+    )
+    suspend fun updateProgress(
+        id: String,
+        downloadedBytes: Long,
+        totalBytes: Long,
+        segmentsDone: Int,
+        segmentsTotal: Int,
+        updatedAt: Long,
+    )
 }

@@ -21,6 +21,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import com.github.avbox.osc.R
 import com.github.avbox.osc.download.DownloadSettings
+import com.github.avbox.osc.download.ExternalDownloader
 import com.github.avbox.osc.player.BasePlayerView
 import com.github.avbox.osc.player.PlaybackService
 import com.github.avbox.osc.player.controller.PlayerTextFormat
@@ -309,6 +310,7 @@ fun PlaySettingsScreen(onNavigateBack: () -> Unit) {
 
             Spacer(Modifier.height(28.dp))
 
+            val idmInstalled = remember { ExternalDownloader.installedTargets(context).isNotEmpty() }
             var downloadConcurrency by remember { mutableStateOf(DownloadSettings.concurrency) }
             var downloadMethod by remember { mutableStateOf(DownloadSettings.method) }
             var downloadWifiOnly by remember { mutableStateOf(DownloadSettings.wifiOnly) }
@@ -340,22 +342,28 @@ fun PlaySettingsScreen(onNavigateBack: () -> Unit) {
                     )
                 }
                 SettingsCard(SettingsCardPosition.MIDDLE) {
+                    // 没装 IDM+ 就不显示这一项，免得选了一个用不了的方式。
+                    val shownMethod = if (!idmInstalled && downloadMethod == DownloadSettings.METHOD_IDM) {
+                        DownloadSettings.METHOD_BUILTIN
+                    } else {
+                        downloadMethod
+                    }
                     SettingsOptionMenuRow(
                         title = stringResource(R.string.settings_download_method),
                         leadingIconRes = R.drawable.ic_download,
                         valueText = stringResource(
-                            when (downloadMethod) {
+                            when (shownMethod) {
                                 DownloadSettings.METHOD_BUILTIN -> R.string.download_method_builtin
                                 DownloadSettings.METHOD_IDM -> R.string.download_method_idm
                                 else -> R.string.download_method_ask
                             },
                         ),
-                        options = listOf(
-                            stringResource(R.string.download_method_ask),
-                            stringResource(R.string.download_method_builtin),
-                            stringResource(R.string.download_method_idm),
-                        ),
-                        selectedIndex = downloadMethod,
+                        options = buildList {
+                            add(stringResource(R.string.download_method_ask))
+                            add(stringResource(R.string.download_method_builtin))
+                            if (idmInstalled) add(stringResource(R.string.download_method_idm))
+                        },
+                        selectedIndex = shownMethod,
                         onSelect = { idx ->
                             downloadMethod = idx
                             DownloadSettings.method = idx

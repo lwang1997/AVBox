@@ -3,6 +3,7 @@ package com.github.avbox.osc.download
 import android.content.Intent
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
@@ -20,6 +21,7 @@ class ExternalDownloaderTest {
         val intent = ExternalDownloader.buildViewIntent(
             "https://a.com/v.mp4?token=abc",
             "三体 第1集.mp4",
+            emptyMap(),
             packageName,
         )
 
@@ -32,10 +34,72 @@ class ExternalDownloaderTest {
     }
 
     @Test
+    fun viewIntentTargets1dmDownloaderActivity() {
+        val intent = ExternalDownloader.buildViewIntent(
+            "https://a.com/v.mp4",
+            null,
+            emptyMap(),
+            packageName,
+        )
+
+        // 显式指定 1DM 的下载入口，不再依赖它 VIEW 过滤器对 MIME 的匹配。
+        assertEquals(packageName, intent.component?.packageName)
+        assertEquals("idm.internet.download.manager.Downloader", intent.component?.className)
+    }
+
+    @Test
+    fun requestHeadersAreForwardedAsBundle() {
+        val intent = ExternalDownloader.buildViewIntent(
+            "https://a.com/v.mp4",
+            null,
+            linkedMapOf("Referer" to "https://a.com/", "User-Agent" to "AVBox"),
+            packageName,
+        )
+
+        val bundle = intent.getBundleExtra("extra_headers")
+        assertEquals("https://a.com/", bundle?.getString("Referer"))
+        assertEquals("AVBox", bundle?.getString("User-Agent"))
+    }
+
+    @Test
+    fun hopByHopHeadersAreNotForwarded() {
+        val intent = ExternalDownloader.buildViewIntent(
+            "https://a.com/v.mp4",
+            null,
+            mapOf(
+                "Host" to "evil.example.com",
+                "Range" to "bytes=0-",
+                "Accept-Encoding" to "gzip",
+                "Cookie" to "sid=1",
+            ),
+            packageName,
+        )
+
+        val bundle = intent.getBundleExtra("extra_headers")
+        assertNull(bundle?.getString("Host"))
+        assertNull(bundle?.getString("Range"))
+        assertNull(bundle?.getString("Accept-Encoding"))
+        assertEquals("sid=1", bundle?.getString("Cookie"))
+    }
+
+    @Test
+    fun emptyHeadersDoNotAttachBundle() {
+        val intent = ExternalDownloader.buildViewIntent(
+            "https://a.com/v.mp4",
+            null,
+            emptyMap(),
+            packageName,
+        )
+
+        assertFalse(intent.hasExtra("extra_headers"))
+    }
+
+    @Test
     fun hlsUrlUsesMpegUrlMimeType() {
         val intent = ExternalDownloader.buildViewIntent(
             "https://a.com/v/index.m3u8?sign=1",
             "index.m3u8",
+            emptyMap(),
             packageName,
         )
         assertEquals("application/vnd.apple.mpegurl", intent.type)
@@ -43,7 +107,12 @@ class ExternalDownloaderTest {
 
     @Test
     fun blankFileNameIsNotAttached() {
-        val intent = ExternalDownloader.buildViewIntent("https://a.com/v.mp4", "  ", packageName)
+        val intent = ExternalDownloader.buildViewIntent(
+            "https://a.com/v.mp4",
+            "  ",
+            emptyMap(),
+            packageName,
+        )
         assertFalse(intent.hasExtra("extra_filename"))
     }
 

@@ -49,6 +49,8 @@ data class DownloadTask(
     val createdAt: Long,
     val updatedAt: Long,
     val completedAt: Long,
+    /** 运行期的实时速度（字节/秒），只用于界面展示，不落库。 */
+    val speedBytesPerSec: Long = 0L,
 ) {
     val active: Boolean
         get() = status == DownloadStatus.QUEUED ||

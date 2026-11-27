@@ -13,6 +13,7 @@ import android.os.IBinder
 import android.os.PowerManager
 
 import androidx.core.app.NotificationCompat
+import androidx.core.app.NotificationManagerCompat
 
 import com.github.avbox.osc.R
 import com.github.avbox.osc.bean.DownloadStatus
@@ -36,8 +37,58 @@ class DownloadService : Service() {
         const val ACTION_CANCEL = "download.cancel"
         const val EXTRA_ID = "download_id"
 
+        /** 长下载中途会被超时打断，所以每有进度就续一次。 */
+        private const val WAKE_LOCK_TIMEOUT_MS = 30 * 60 * 1000L
+
         private const val CHANNEL_ID = "download_channel"
         private const val NOTIFICATION_ID = 0x0D1
+        private const val NOTIFICATION_ID_COMPLETED = 0x0D2
+
+        /** 下载完成提醒，受“完成后通知”开关控制；没有通知权限时静默跳过。 */
+        fun notifyCompleted(context: Context, task: DownloadTask) {
+            if (!DownloadSettings.notifyCompleted) return
+            runCatching {
+                val manager = NotificationManagerCompat.from(context)
+                if (!manager.areNotificationsEnabled()) return
+                ensureChannel(context)
+                val notification = NotificationCompat.Builder(context, CHANNEL_ID)
+                    .setSmallIcon(R.drawable.ic_download)
+                    .setContentTitle(context.getString(R.string.download_status_completed))
+                    .setContentText(task.fileName)
+                    .setOnlyAlertOnce(true)
+                    .setAutoCancel(true)
+                    .setShowWhen(false)
+                    .setContentIntent(downloadsIntent(context))
+                    .build()
+                manager.notify(NOTIFICATION_ID_COMPLETED, notification)
+            }.onFailure { AppLog.e("DownloadService", it) }
+        }
+
+        fun ensureChannel(context: Context) {
+            val manager = context.getSystemService(NOTIFICATION_SERVICE) as NotificationManager
+            if (manager.getNotificationChannel(CHANNEL_ID) != null) return
+            val channel = NotificationChannel(
+                CHANNEL_ID,
+                context.getString(R.string.download_service_channel_name),
+                NotificationManager.IMPORTANCE_LOW,
+            ).apply {
+                description = context.getString(R.string.download_service_channel_desc)
+                setShowBadge(false)
+            }
+            manager.createNotificationChannel(channel)
+        }
+
+        private fun downloadsIntent(context: Context): PendingIntent {
+            val intent = Intent(Intent.ACTION_VIEW, Uri.parse("avbox://downloads")).apply {
+                setPackage(context.packageName)
+            }
+            return PendingIntent.getActivity(
+                context,
+                0,
+                intent,
+                PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+            )
+        }
     }
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
@@ -47,7 +98,7 @@ class DownloadService : Service() {
 
     override fun onCreate() {
         super.onCreate()
-        createChannel()
+        ensureChannel(this)
         acquireLocks()
         scope.launch {
             DownloadManager.tasks.collect { tasks -> updateNotification(tasks) }
@@ -57,7 +108,14 @@ class DownloadService : Service() {
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
         if (!foregroundStarted) {
             foregroundStarted = true
-            startForeground(NOTIFICATION_ID, buildNotification(DownloadManager.tasks.value))
+            try {
+                startForeground(NOTIFICATION_ID, buildNotification(DownloadManager.tasks.value))
+            } catch (th: Throwable) {
+                // 后台限制或 dataSync 配额到期都可能在这里抛，别让通知失败把整个进程带崩。
+                AppLog.e("DownloadService", th)
+                stopSelf()
+                return START_NOT_STICKY
+            }
         }
         when (intent?.action) {
             ACTION_PAUSE_ALL -> DownloadManager.pauseAll()
@@ -65,7 +123,11 @@ class DownloadService : Service() {
             ACTION_PAUSE -> intent.getStringExtra(EXTRA_ID)?.let(DownloadManager::pause)
             ACTION_RESUME -> intent.getStringExtra(EXTRA_ID)?.let(DownloadManager::resume)
             ACTION_CANCEL -> intent.getStringExtra(EXTRA_ID)?.let(DownloadManager::cancel)
-            ACTION_STOP -> stopSelf()
+            // 用户点“停止”是希望下载停下，不只是藏掉通知。
+            ACTION_STOP -> {
+                DownloadManager.pauseAll()
+                stopSelf()
+            }
         }
         return START_NOT_STICKY
     }
@@ -81,19 +143,30 @@ class DownloadService : Service() {
 
     private fun updateNotification(tasks: List<DownloadTask>) {
         val active = tasks.filter { it.active }
-        if (active.isEmpty()) {
+        val progressing = active.any {
+            it.status == DownloadStatus.DOWNLOADING || it.status == DownloadStatus.MERGING
+        }
+        // 全都在等 Wi-Fi 时不再占着前台通知；网络回来由 DownloadManager 重新拉起服务。
+        val startable = !DownloadSettings.wifiOnly || DownloadManager.isWifiConnected()
+        if (active.isEmpty() || (!progressing && !startable)) {
             stopForeground(STOP_FOREGROUND_REMOVE)
             stopSelf()
             return
         }
+        ensureWakeLock()
         val manager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
         manager.notify(NOTIFICATION_ID, buildNotification(tasks))
     }
 
     private fun buildNotification(tasks: List<DownloadTask>): Notification {
         val active = tasks.filter { it.active }
-        val task = active.firstOrNull() ?: tasks.firstOrNull()
-        val running = active.filter { it.status == DownloadStatus.DOWNLOADING }.size
+        // 优先展示真正在下的那个任务，排队中的任务拿来当前排会一直显示 0%。
+        val task = active.firstOrNull {
+            it.status == DownloadStatus.DOWNLOADING || it.status == DownloadStatus.MERGING
+        } ?: active.firstOrNull() ?: tasks.firstOrNull()
+        val running = active.count {
+            it.status == DownloadStatus.DOWNLOADING || it.status == DownloadStatus.MERGING
+        }
         val title = if (active.size > 1) {
             getString(R.string.download_notification_count, active.size)
         } else {
@@ -107,7 +180,7 @@ class DownloadService : Service() {
             .setOnlyAlertOnce(true)
             .setOngoing(true)
             .setShowWhen(false)
-            .setContentIntent(contentIntent())
+            .setContentIntent(downloadsIntent(this))
         if (active.isNotEmpty()) {
             builder.setProgress(100, progress, progress <= 0)
         }
@@ -127,18 +200,6 @@ class DownloadService : Service() {
         return builder.build()
     }
 
-    private fun contentIntent(): PendingIntent {
-        val intent = Intent(Intent.ACTION_VIEW, Uri.parse("avbox://downloads")).apply {
-            setPackage(packageName)
-        }
-        return PendingIntent.getActivity(
-            this,
-            0,
-            intent,
-            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
-        )
-    }
-
     private fun actionIntent(action: String): PendingIntent {
         val intent = Intent(this, DownloadService::class.java).setAction(action)
         return PendingIntent.getService(
@@ -149,18 +210,10 @@ class DownloadService : Service() {
         )
     }
 
-    private fun createChannel() {
-        val manager = getSystemService(NOTIFICATION_SERVICE) as NotificationManager
-        if (manager.getNotificationChannel(CHANNEL_ID) != null) return
-        val channel = NotificationChannel(
-            CHANNEL_ID,
-            getString(R.string.download_service_channel_name),
-            NotificationManager.IMPORTANCE_LOW,
-        ).apply {
-            description = getString(R.string.download_service_channel_desc)
-            setShowBadge(false)
-        }
-        manager.createNotificationChannel(channel)
+    private fun ensureWakeLock() {
+        val lock = wakeLock ?: return
+        if (lock.isHeld) return
+        runCatching { lock.acquire(WAKE_LOCK_TIMEOUT_MS) }
     }
 
     @Suppress("WAKELOCK_TIMEOUT")
@@ -169,7 +222,7 @@ class DownloadService : Service() {
             val power = getSystemService(POWER_SERVICE) as PowerManager
             wakeLock = power.newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "avbox:download").apply {
                 setReferenceCounted(false)
-                acquire(30 * 60 * 1000L)
+                acquire(WAKE_LOCK_TIMEOUT_MS)
             }
         } catch (th: Throwable) {
             AppLog.e("DownloadService", th)

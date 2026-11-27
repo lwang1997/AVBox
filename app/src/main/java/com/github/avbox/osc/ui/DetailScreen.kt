@@ -21,6 +21,8 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material3.ContainedLoadingIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -57,6 +59,7 @@ import androidx.lifecycle.compose.LifecycleEventEffect
 import com.github.avbox.osc.R
 import com.github.avbox.osc.player.state.PlayerUiState
 import com.github.avbox.osc.ui.player.CastSheet
+import com.github.avbox.osc.ui.components.AVBoxAlertDialog
 import com.github.avbox.osc.ui.components.HomeBackdrop
 import com.github.avbox.osc.ui.components.ImagePalette
 import com.github.avbox.osc.ui.components.LoadState
@@ -66,7 +69,6 @@ import com.github.avbox.osc.ui.components.PosterBackdrop
 import com.github.avbox.osc.ui.components.VodCardMenu
 import com.github.avbox.osc.ui.components.rememberVodCardMenuState
 import com.github.avbox.osc.ui.download.DownloadMethodDialog
-import com.github.avbox.osc.ui.download.IdmHeaderConfirmDialog
 import com.github.avbox.osc.ui.theme.AppThemeState
 import com.github.avbox.osc.ui.settings.UiSettingsState
 import com.kyant.backdrop.backdrops.layerBackdrop
@@ -452,10 +454,25 @@ fun DetailScreen(activity: DetailActivity, vm: DetailViewModel) {
                 onDismiss = { prompt.cancel() },
             )
         }
-        activity.idmHeaderConfirmPrompt?.let { prompt ->
-            IdmHeaderConfirmDialog(
-                onContinueIdm = { prompt.useIdm() },
-                onUseBuiltin = { prompt.useBuiltin() },
+        activity.downloadBatch?.let { batch ->
+            AVBoxAlertDialog(
+                onDismissRequest = {},
+                dismissible = false,
+                title = { Text(stringResource(R.string.download_title)) },
+                text = {
+                    Text(
+                        stringResource(
+                            R.string.download_batch_progress,
+                            batch.current,
+                            batch.total,
+                        ),
+                    )
+                },
+                confirmButton = {
+                    TextButton(onClick = batch.onCancel) {
+                        Text(stringResource(R.string.download_batch_cancel))
+                    }
+                },
             )
         }
         VodCardMenu(vodMenu) { menuContext.jumpToSearch(it) }
