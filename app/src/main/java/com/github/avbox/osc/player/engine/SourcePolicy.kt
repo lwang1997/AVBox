@@ -32,10 +32,12 @@ object SourcePolicy {
     fun resolveCacheMode(
         isLocalProxyUrl: Boolean,
         isRtmp: Boolean,
+        isLive: Boolean,
         preloadTarget: Boolean,
         playCacheWanted: Boolean,
     ): CacheMode = when {
-        isLocalProxyUrl || isRtmp -> CacheMode.NONE
+        // 直播分片是滚动窗口、播放列表还会反复刷新，和磁盘缓存天然冲突，一律不缓存。
+        isLocalProxyUrl || isRtmp || isLive -> CacheMode.NONE
         preloadTarget -> CacheMode.PRELOAD_TARGET
         playCacheWanted -> CacheMode.PLAY_CACHE
         else -> CacheMode.NONE

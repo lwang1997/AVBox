@@ -346,14 +346,18 @@ class PlayerEngine(
         val mode = SourcePolicy.resolveCacheMode(
             isLocalProxyUrl = SourcePolicy.isLocalProxyUrl(playPath),
             isRtmp = SourcePolicy.isRtmp(playPath),
+            isLive = isLive,
             preloadTarget = preloadTarget,
             playCacheWanted = playCacheWanted,
         )
         if (mode == SourcePolicy.CacheMode.NONE) {
             if (preloadTarget || playCacheWanted) {
-                AppLog.i(
-                    (if (SourcePolicy.isRtmp(playPath)) "echo-play-cache-skip-rtmp: " else "echo-play-cache-skip-local-proxy: ") + playPath,
-                )
+                val reason = when {
+                    SourcePolicy.isRtmp(playPath) -> "echo-play-cache-skip-rtmp: "
+                    isLive -> "echo-play-cache-skip-live: "
+                    else -> "echo-play-cache-skip-local-proxy: "
+                }
+                AppLog.i(reason + playPath)
             }
             return
         }

@@ -29,7 +29,6 @@ import com.github.avbox.osc.R
 import com.github.avbox.osc.bean.VodInfo
 import com.github.avbox.osc.data.PlaybackDataPorts
 import com.github.avbox.osc.data.PlaybackPorts
-import com.github.avbox.osc.io.FileUtils
 import com.github.avbox.osc.player.engine.PlayerCache
 import com.github.avbox.osc.util.KVKeys
 import com.github.avbox.osc.util.KV
@@ -81,10 +80,8 @@ class PlaybackService : Service() {
     }
 
     private fun initPlayerCache() {
-        Thread({
-            FileUtils.purgeExoCacheIfPending()
-            PlayerCache.warmup(this)
-        }, "playback-cache-boot").start()
+        // 待清理标记统一在 PlayerCache 构建缓存时消费，这里只做预热。
+        Thread({ PlayerCache.warmup(this) }, "playback-cache-boot").start()
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {

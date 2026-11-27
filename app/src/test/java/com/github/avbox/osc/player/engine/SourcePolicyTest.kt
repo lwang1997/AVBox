@@ -46,10 +46,11 @@ class SourcePolicyTest {
     private fun mode(
         isLocalProxyUrl: Boolean = false,
         isRtmp: Boolean = false,
+        isLive: Boolean = false,
         preloadTarget: Boolean = false,
         playCacheWanted: Boolean = false,
     ): SourcePolicy.CacheMode =
-        SourcePolicy.resolveCacheMode(isLocalProxyUrl, isRtmp, preloadTarget, playCacheWanted)
+        SourcePolicy.resolveCacheMode(isLocalProxyUrl, isRtmp, isLive, preloadTarget, playCacheWanted)
 
     @Test
     fun cacheMode_noneWhenNothingWanted() {
@@ -66,6 +67,12 @@ class SourcePolicyTest {
     fun cacheMode_rtmpAlwaysNone() {
         assertEquals(SourcePolicy.CacheMode.NONE, mode(isRtmp = true, preloadTarget = true))
         assertEquals(SourcePolicy.CacheMode.NONE, mode(isRtmp = true, playCacheWanted = true))
+    }
+
+    @Test
+    fun cacheMode_liveAlwaysNone() {
+        assertEquals(SourcePolicy.CacheMode.NONE, mode(isLive = true, playCacheWanted = true))
+        assertEquals(SourcePolicy.CacheMode.NONE, mode(isLive = true, preloadTarget = true))
     }
 
     @Test

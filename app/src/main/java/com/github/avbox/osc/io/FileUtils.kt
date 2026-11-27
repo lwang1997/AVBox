@@ -348,6 +348,16 @@ object FileUtils {
         }
     }
 
+    /** 改了缓存容量：SimpleCache 的上限构造时固定，标记下一次构建前清空重建。 */
+    @JvmStatic
+    fun markExoCacheClearPending() {
+        try {
+            pendingExoClearFlag().writeText("1")
+        } catch (e: Exception) {
+            AppLog.e("FileUtils", e)
+        }
+    }
+
     @JvmStatic
     fun purgeExoCacheIfPending() {
         val flag = pendingExoClearFlag()

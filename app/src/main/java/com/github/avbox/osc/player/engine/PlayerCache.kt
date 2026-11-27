@@ -8,6 +8,7 @@ import androidx.media3.datasource.cache.Cache
 import androidx.media3.datasource.cache.LeastRecentlyUsedCacheEvictor
 import androidx.media3.datasource.cache.SimpleCache
 import com.github.avbox.osc.BuildConfig
+import com.github.avbox.osc.io.FileUtils
 import com.github.avbox.osc.util.KVKeys
 import com.github.avbox.osc.util.KV
 import com.github.avbox.osc.util.AppLog
@@ -36,6 +37,9 @@ object PlayerCache {
             sharedCache?.let { return it }
             ensureSizeFromConfig()
             val appContext = context.applicationContext
+            // 改过容量时先清空再用新上限重建；放在同一把锁里，避免和缓存构建并发删目录。
+            runCatching { FileUtils.purgeExoCacheIfPending() }
+                .onFailure { AppLog.e("PlayerCache", it) }
             Trace.beginSection("playerCache:buildSimpleCache")
             val created = try {
                 SimpleCache(

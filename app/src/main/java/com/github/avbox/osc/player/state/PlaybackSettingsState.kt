@@ -5,6 +5,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import com.github.avbox.osc.player.effect.anime4k.Anime4kMode
 import com.github.avbox.osc.player.effect.anime4k.Anime4kSettings
+import com.github.avbox.osc.io.FileUtils
 import com.github.avbox.osc.player.effect.anime4k.Anime4kTier
 import com.github.avbox.osc.util.KVKeys
 import com.github.avbox.osc.util.KV
@@ -187,8 +188,11 @@ object PlaybackSettingsState {
     var exoCacheSizeMb: Int
         get() = current.exoCacheSizeMb
         set(value) {
+            if (current.exoCacheSizeMb == value) return
             KV.put(KVKeys.EXO_CACHE_SIZE_MB, value)
             current = current.copy(exoCacheSizeMb = value)
+            // 已建好的 SimpleCache 改不了上限：标记下次构建前清空，按新容量重建。
+            FileUtils.markExoCacheClearPending()
         }
 
     var preloadNextEpisode: Boolean
