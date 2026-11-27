@@ -286,6 +286,12 @@
     <string name="following_tmdb_status_planned">待開播</string>
     <string name="following_tmdb_status_production">製作中</string>
     <string name="following_delete_selected_message">確定刪除選中的 %1$d 部追劇嗎？</string>
+    <string name="following_rebind_site">更換播放站點</string>
+    <string name="following_rebind_title">更換「%1$s」的播放站點</string>
+    <string name="following_rebind_current">目前</string>
+    <string name="following_rebind_switch">換個站點</string>
+    <string name="following_rebind_empty">沒有找到相關結果，換個站點試試</string>
+    <string name="following_rebind_search_hint">搜尋站點</string>
     <string name="toast_follow_saved">已加入追劇</string>
     <string name="collect_clear_message">將刪除全部收藏，此操作無法復原</string>
     <string name="collect_uncollect_message">取消收藏「%1$s」？</string>
@@ -371,6 +377,7 @@
     <string name="history_incognito">無痕模式：不顯示觀看紀錄</string>
     <string name="history_clear_message">將刪除全部觀看歷史紀錄，此操作無法復原</string>
     <string name="history_delete_title">刪除紀錄</string>
+    <string name="history_search_other_sites">搜尋其他站點</string>
     <string name="history_delete_message">刪除「%1$s」的觀看紀錄？</string>
     <string name="history_delete_selected_message">確定刪除選中的 %1$d 條觀看紀錄嗎？</string>
     <string name="source_unavailable">當前源不可用</string>

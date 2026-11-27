@@ -44,7 +44,6 @@ import com.github.avbox.osc.ui.components.AppTopBarScaffold
 import com.github.avbox.osc.ui.components.CapsuleSegmentedButton
 import com.github.avbox.osc.ui.components.ProvideTmdbPosterLookup
 import com.github.avbox.osc.ui.components.SegmentOption
-import com.github.avbox.osc.ui.components.SegmentStyle
 import com.github.avbox.osc.ui.download.DownloadTab
 import kotlinx.coroutines.flow.drop
 
@@ -237,9 +236,8 @@ fun RecordsPage(
                 ),
                 selectedValue = mode,
                 onOptionSelected = { mode = it },
-                style = SegmentStyle.Track,
-                containerColor = MaterialTheme.colorScheme.surfaceContainer,
-                pressMorph = true,
+                containerColor = MaterialTheme.colorScheme.surfaceBright,
+                stableShape = true,
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(start = 16.dp + navStart, end = 16.dp, top = topPad + 8.dp),

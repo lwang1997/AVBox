@@ -286,6 +286,12 @@
     <string name="following_tmdb_status_planned">Planned</string>
     <string name="following_tmdb_status_production">In production</string>
     <string name="following_delete_selected_message">Remove %1$d selected shows from following?</string>
+    <string name="following_rebind_site">Change playback site</string>
+    <string name="following_rebind_title">Change playback site for “%1$s”</string>
+    <string name="following_rebind_current">Current</string>
+    <string name="following_rebind_switch">Switch site</string>
+    <string name="following_rebind_empty">No results found. Try another site.</string>
+    <string name="following_rebind_search_hint">Search sites</string>
     <string name="toast_follow_saved">Added to following</string>
     <string name="collect_clear_message">This will delete all favorites and cannot be undone</string>
     <string name="collect_uncollect_message">Remove “%1$s” from favorites?</string>
@@ -371,6 +377,7 @@
     <string name="history_incognito">Incognito: watch history hidden</string>
     <string name="history_clear_message">This will delete all watch history and cannot be undone</string>
     <string name="history_delete_title">Delete record</string>
+    <string name="history_search_other_sites">Search on other sites</string>
     <string name="history_delete_message">Delete the watch record for “%1$s”?</string>
     <string name="history_delete_selected_message">Delete %1$d selected watch records?</string>
     <string name="source_unavailable">Source unavailable</string>

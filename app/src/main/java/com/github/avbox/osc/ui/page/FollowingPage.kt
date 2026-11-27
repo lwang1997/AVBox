@@ -16,17 +16,21 @@ import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.calculateStartPadding
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.material3.ContainedLoadingIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.pullToRefresh
@@ -38,12 +42,15 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
@@ -51,14 +58,24 @@ import androidx.lifecycle.compose.LifecycleEventEffect
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.github.avbox.osc.R
+import com.github.avbox.osc.bean.Movie
+import com.github.avbox.osc.bean.SiteHealth
 import com.github.avbox.osc.data.AppGraph
 import com.github.avbox.osc.data.EpisodeTotals
 import com.github.avbox.osc.data.PlaybackProgress
 import com.github.avbox.osc.ui.WindowSize
 import com.github.avbox.osc.ui.components.AppTopBarScaffold
+import com.github.avbox.osc.ui.components.AVBoxBottomSheet
 import com.github.avbox.osc.ui.components.LoadState
 import com.github.avbox.osc.ui.components.LoadStateBox
 import com.github.avbox.osc.ui.components.ProvideTmdbPosterLookup
+import com.github.avbox.osc.ui.components.SearchField
+import com.github.avbox.osc.ui.components.SettingsCard
+import com.github.avbox.osc.ui.components.SettingsCardPosition
+import com.github.avbox.osc.ui.components.SettingsGroup
+import com.github.avbox.osc.ui.components.SettingsOptionRow
+import com.github.avbox.osc.ui.components.SiteHealthBadge
+import com.github.avbox.osc.ui.components.VodPoster
 import com.github.avbox.osc.ui.components.WeekdayChip
 import com.github.avbox.osc.ui.components.WeekdayRes
 import com.github.avbox.osc.util.SubscribeList
@@ -80,8 +97,11 @@ fun FollowingPage(
     val editMode by vm.editMode.collectAsStateWithLifecycle()
     val selected by vm.selected.collectAsStateWithLifecycle()
     val episodeTotals by vm.episodeTotals.collectAsStateWithLifecycle()
+    val siteTotals by vm.siteTotals.collectAsStateWithLifecycle()
     val playedPercents by vm.playedPercents.collectAsStateWithLifecycle()
     val today by vm.today.collectAsStateWithLifecycle()
+    val rebindState by vm.rebind.collectAsStateWithLifecycle()
+    val siteHealth by vm.siteHealth.collectAsStateWithLifecycle()
 
     val listState = rememberLazyGridState()
     val topBarExpanded = remember { mutableStateOf(true) }
@@ -234,6 +254,7 @@ fun FollowingPage(
                                     follow = follow,
                                     history = entry.history,
                                     totalEpisodes = episodeTotals[EpisodeTotals.key(follow.sourceKey, follow.vodId)],
+                                    siteTotal = siteTotals[EpisodeTotals.key(follow.sourceKey, follow.vodId)],
                                     playedPercent = playedPercents[PlaybackProgress.key(follow.sourceKey, follow.vodId)],
                                     watched = FollowListRules.isWatched(entry, selectedDay),
                                     editMode = editMode,
@@ -276,6 +297,7 @@ fun FollowingPage(
                                         if (editMode) vm.toggleSelected(follow.id) else vm.enterEdit(follow.id)
                                     },
                                     onWatchedChange = { vm.setWatched(follow.id, it) },
+                                    onRebind = { vm.startRebind(follow) },
                                 )
                             }
                         }
@@ -299,6 +321,185 @@ fun FollowingPage(
             onConfirm = { vm.deleteSelected() },
             onDismiss = { deleteDialog = false },
         )
+    }
+
+    rebindState?.let { state ->
+        RebindSheet(
+            state = state,
+            siteHealth = siteHealth,
+            onDismiss = { vm.dismissRebind() },
+            onBack = { vm.rebindBackToSites() },
+            onChooseSite = { vm.chooseRebindSite(it) },
+            onPick = { vm.confirmRebind(it) },
+        )
+    }
+}
+
+@Composable
+private fun RebindSheet(
+    state: RebindState,
+    siteHealth: Map<String, SiteHealth>,
+    onDismiss: () -> Unit,
+    onBack: () -> Unit,
+    onChooseSite: (RebindSite) -> Unit,
+    onPick: (Movie.Video) -> Unit,
+) {
+    var query by rememberSaveable { mutableStateOf("") }
+    val keyword = query.trim()
+    AVBoxBottomSheet(
+        onDismissRequest = onDismiss,
+        title = null,
+        containerColor = MaterialTheme.colorScheme.surfaceContainer,
+        headerContent = {
+            Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+                Text(
+                    text = stringResource(R.string.following_rebind_title, state.follow.name.orEmpty()),
+                    style = MaterialTheme.typography.titleMedium,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.padding(vertical = 8.dp),
+                )
+                if (state.siteKey == null) {
+                    SearchField(
+                        query = query,
+                        onQueryChange = { query = it },
+                        onSearch = {},
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(bottom = 12.dp),
+                        hint = stringResource(R.string.following_rebind_search_hint),
+                    )
+                }
+            }
+        },
+    ) {
+        Column(
+            modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            if (state.siteKey == null) {
+                val shown = remember(state.sites, keyword) {
+                    if (keyword.isEmpty()) {
+                        state.sites
+                    } else {
+                        state.sites.filter {
+                            it.name.contains(keyword, ignoreCase = true) ||
+                                it.key.contains(keyword, ignoreCase = true)
+                        }
+                    }
+                }
+                if (shown.isEmpty()) {
+                    Text(
+                        text = stringResource(R.string.search_no_result, keyword),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(vertical = 24.dp),
+                    )
+                } else {
+                    SettingsGroup(title = null) {
+                        shown.forEachIndexed { index, site ->
+                            SettingsCard(
+                                position = when {
+                                    shown.size <= 1 -> SettingsCardPosition.SINGLE
+                                    index == 0 -> SettingsCardPosition.FIRST
+                                    index == shown.size - 1 -> SettingsCardPosition.LAST
+                                    else -> SettingsCardPosition.MIDDLE
+                                },
+                                color = MaterialTheme.colorScheme.surfaceBright,
+                            ) {
+                                SettingsOptionRow(
+                                    title = site.name,
+                                    selected = site.key == state.follow.sourceKey,
+                                    onClick = { onChooseSite(site) },
+                                    trailing = {
+                                        SiteHealthBadge(
+                                            health = siteHealth[site.key],
+                                            modifier = Modifier.padding(end = 8.dp),
+                                        )
+                                    },
+                                )
+                            }
+                        }
+                    }
+                }
+            } else {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        text = state.siteName.orEmpty(),
+                        style = MaterialTheme.typography.titleSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        modifier = Modifier.weight(1f),
+                    )
+                    TextButton(onClick = onBack) {
+                        Text(stringResource(R.string.following_rebind_switch))
+                    }
+                }
+                when {
+                    state.searching -> Box(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 24.dp),
+                        contentAlignment = Alignment.Center,
+                    ) {
+                        ContainedLoadingIndicator(Modifier.size(40.dp))
+                    }
+
+                    state.results.isEmpty() -> Text(
+                        text = stringResource(R.string.following_rebind_empty),
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        modifier = Modifier.padding(vertical = 24.dp),
+                    )
+
+                    else -> state.results.forEach { video ->
+                        Surface(
+                            onClick = { onPick(video) },
+                            shape = RoundedCornerShape(16.dp),
+                            color = MaterialTheme.colorScheme.surfaceBright,
+                            modifier = Modifier.fillMaxWidth(),
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(10.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                VodPoster(
+                                    name = video.name,
+                                    pic = video.pic,
+                                    modifier = Modifier
+                                        .size(width = 44.dp, height = 66.dp)
+                                        .clip(RoundedCornerShape(8.dp)),
+                                )
+                                Spacer(Modifier.width(12.dp))
+                                Column(
+                                    modifier = Modifier.weight(1f),
+                                    verticalArrangement = Arrangement.spacedBy(2.dp),
+                                ) {
+                                    Text(
+                                        text = video.name.orEmpty(),
+                                        style = MaterialTheme.typography.bodyMedium,
+                                        color = MaterialTheme.colorScheme.onSurface,
+                                        maxLines = 1,
+                                        overflow = TextOverflow.Ellipsis,
+                                    )
+                                    val meta = listOfNotNull(
+                                        video.year.takeIf { it > 0 }?.toString(),
+                                        video.note?.takeIf { it.isNotBlank() },
+                                    ).joinToString(" · ")
+                                    if (meta.isNotEmpty()) {
+                                        Text(
+                                            text = meta,
+                                            style = MaterialTheme.typography.bodySmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                            maxLines = 1,
+                                            overflow = TextOverflow.Ellipsis,
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 

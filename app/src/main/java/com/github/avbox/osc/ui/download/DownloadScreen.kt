@@ -1,6 +1,7 @@
 package com.github.avbox.osc.ui.download
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -11,9 +12,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.Card
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -36,7 +38,12 @@ import com.github.avbox.osc.bean.DownloadTask
 import com.github.avbox.osc.download.DownloadStorage
 import com.github.avbox.osc.ui.components.AppTopBarScaffold
 import com.github.avbox.osc.ui.components.AVBoxAlertDialog
+import com.github.avbox.osc.ui.components.LoadState
+import com.github.avbox.osc.ui.components.LoadStateBox
 import com.github.avbox.osc.ui.components.TopBarActionBox
+import com.github.avbox.osc.ui.theme.cardContainer
+
+private val DownloadCardCorner = 22.dp
 
 @Composable
 fun DownloadScreen(vm: DownloadViewModel, onNavigateBack: () -> Unit) {
@@ -56,6 +63,7 @@ fun DownloadScreen(vm: DownloadViewModel, onNavigateBack: () -> Unit) {
             vm = vm,
             topPadding = topPad + 8.dp,
             bottomPadding = bottomPad + 16.dp,
+            emptyBottomPadding = bottomPad,
             startInset = 0.dp,
         )
     }
@@ -69,6 +77,7 @@ internal fun DownloadTab(navStart: Dp, navBottom: Dp) {
         vm = vm,
         topPadding = 8.dp,
         bottomPadding = navBottom + 16.dp,
+        emptyBottomPadding = navBottom,
         startInset = navStart,
     )
 }
@@ -78,6 +87,7 @@ private fun DownloadTaskList(
     vm: DownloadViewModel,
     topPadding: Dp,
     bottomPadding: Dp,
+    emptyBottomPadding: Dp,
     startInset: Dp,
 ) {
     val tasks by vm.tasks.collectAsState()
@@ -91,6 +101,31 @@ private fun DownloadTaskList(
     var pendingDelete by remember { mutableStateOf<DownloadTask?>(null) }
     var pendingClear by remember { mutableStateOf(false) }
 
+    if (tasks.isEmpty()) {
+        // 空态与历史/收藏页保持一致：存储卡固定顶部，图标+文案在内容区内居中。
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(start = startInset),
+        ) {
+            DownloadStorageCard(
+                freeBytes = freeBytes,
+                modifier = Modifier.padding(start = 16.dp, end = 16.dp, top = topPadding),
+            )
+            LoadStateBox(
+                state = LoadState.Empty,
+                emptyText = stringResource(R.string.download_empty),
+                errorText = "",
+                retryText = "",
+                emptyIconRes = R.drawable.ic_empty_record,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(start = 16.dp, end = 16.dp, bottom = emptyBottomPadding),
+            )
+        }
+        return
+    }
+
     LazyColumn(
         modifier = Modifier
             .fillMaxSize()
@@ -101,23 +136,10 @@ private fun DownloadTaskList(
             top = topPadding,
             bottom = bottomPadding,
         ),
-        verticalArrangement = Arrangement.spacedBy(10.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
             item {
-                Card(Modifier.fillMaxWidth()) {
-                    Column(Modifier.padding(14.dp)) {
-                        Text(
-                            text = stringResource(R.string.download_storage_summary),
-                            style = MaterialTheme.typography.titleSmall,
-                        )
-                        Spacer(Modifier.height(4.dp))
-                        Text(
-                            text = formatBytes(freeBytes) + " " + stringResource(R.string.download_free_space),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        )
-                    }
-                }
+                DownloadStorageCard(freeBytes)
             }
             if (clearable > 0) {
                 item {
@@ -128,19 +150,7 @@ private fun DownloadTaskList(
                     }
                 }
             }
-            if (tasks.isEmpty()) {
-                item {
-                    Text(
-                        text = stringResource(R.string.download_empty),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(top = 48.dp),
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                    )
-                }
-            } else {
-                if (active.isNotEmpty()) {
+            if (active.isNotEmpty()) {
                     item {
                         Text(
                             text = stringResource(R.string.download_group_active),
@@ -200,7 +210,6 @@ private fun DownloadTaskList(
                         )
                     }
                 }
-            }
         }
 
     pendingDelete?.let { task ->
@@ -250,6 +259,28 @@ private fun DownloadTaskList(
 }
 
 @Composable
+private fun DownloadStorageCard(freeBytes: Long, modifier: Modifier = Modifier) {
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(DownloadCardCorner),
+        color = MaterialTheme.colorScheme.cardContainer,
+    ) {
+        Column(Modifier.padding(horizontal = 12.dp, vertical = 12.dp)) {
+            Text(
+                text = stringResource(R.string.download_storage_summary),
+                style = MaterialTheme.typography.titleMedium,
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = formatBytes(freeBytes) + " " + stringResource(R.string.download_free_space),
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+@Composable
 private fun DownloadItemCard(
     task: DownloadTask,
     onPause: () -> Unit,
@@ -259,11 +290,15 @@ private fun DownloadItemCard(
     onDelete: () -> Unit,
     onOpen: () -> Unit,
 ) {
-    Card(Modifier.fillMaxWidth()) {
-        Column(Modifier.padding(14.dp)) {
+    Surface(
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(DownloadCardCorner),
+        color = MaterialTheme.colorScheme.cardContainer,
+    ) {
+        Column(Modifier.padding(horizontal = 12.dp, vertical = 12.dp)) {
             Text(
                 text = task.fileName,
-                style = MaterialTheme.typography.titleSmall,
+                style = MaterialTheme.typography.titleMedium,
                 maxLines = 1,
                 color = MaterialTheme.colorScheme.onSurface,
             )

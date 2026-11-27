@@ -30,6 +30,7 @@ import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -42,6 +43,7 @@ import com.github.avbox.osc.bean.VodInfo
 import com.github.avbox.osc.data.EpisodeTotals
 import com.github.avbox.osc.data.PlaybackProgress
 import com.github.avbox.osc.ui.WindowSize
+import com.github.avbox.osc.ui.components.AVBoxOptionSheet
 import com.github.avbox.osc.ui.components.LoadState
 import com.github.avbox.osc.ui.components.LoadStateBox
 import kotlinx.coroutines.delay
@@ -72,6 +74,7 @@ internal fun HistoryTab(
     val placementAnim by vm.placementAnim.collectAsStateWithLifecycle()
     val incognito by vm.incognito.collectAsStateWithLifecycle()
     val nowMsState = rememberMinuteTickState()
+    var menuTarget by remember { mutableStateOf<VodInfo?>(null) }
 
     when {
         incognito -> LoadStateBox(
@@ -160,7 +163,7 @@ internal fun HistoryTab(
                                     }
                                 },
                                 onLongClick = {
-                                    if (editMode) onToggleSelected(itemKey) else onRequestDelete(item)
+                                    if (editMode) onToggleSelected(itemKey) else menuTarget = item
                                 },
                             )
                         }
@@ -168,6 +171,26 @@ internal fun HistoryTab(
                 }
             }
         }
+    }
+
+    menuTarget?.let { target ->
+        val searchOtherSites = stringResource(R.string.history_search_other_sites)
+        val deleteRecord = stringResource(R.string.history_delete_title)
+        AVBoxOptionSheet(
+            onDismissRequest = { menuTarget = null },
+            title = target.name,
+            options = listOf(searchOtherSites, deleteRecord),
+            selected = null,
+            onSelect = { option ->
+                when (option) {
+                    searchOtherSites -> context.jumpToSearch(target.name.orEmpty())
+                    deleteRecord -> {
+                        menuTarget = null
+                        onRequestDelete(target)
+                    }
+                }
+            },
+        )
     }
 }
 

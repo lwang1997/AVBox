@@ -12,8 +12,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialShapes
@@ -155,14 +153,6 @@ private fun VersionPill(
                 style = MaterialTheme.typography.bodySmall,
                 color = contentColor,
                 modifier = Modifier.padding(start = 12.dp),
-            )
-        }
-        if (onClick != null) {
-            Icon(
-                imageVector = Icons.Filled.ChevronRight,
-                contentDescription = null,
-                tint = contentColor.copy(alpha = 0.75f),
-                modifier = Modifier.size(20.dp),
             )
         }
     }

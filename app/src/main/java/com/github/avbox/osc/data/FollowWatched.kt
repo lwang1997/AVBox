@@ -47,6 +47,16 @@ object FollowWatched {
         refreshState()
     }
 
+    /** 更换绑定站点后，把本周已看标记迁移到新条目。 */
+    fun migrate(oldOwner: String, newOwner: String) {
+        if (oldOwner == newOwner) return
+        val week = weekStart()
+        val days = stateFlow.value[oldOwner].orEmpty()
+        if (days.isEmpty()) return
+        mark(newOwner, days, week)
+        clear(oldOwner, days, week)
+    }
+
     internal fun watchedDays(map: Map<String, String>, week: Long): Map<String, Set<Int>> {
         val value = week.toString()
         val result = HashMap<String, MutableSet<Int>>()

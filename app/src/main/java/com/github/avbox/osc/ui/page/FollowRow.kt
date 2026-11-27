@@ -101,6 +101,7 @@ internal fun FollowRow(
     follow: VodFollow,
     history: VodInfo?,
     totalEpisodes: Int?,
+    siteTotal: Int?,
     playedPercent: Int?,
     watched: Boolean,
     editMode: Boolean,
@@ -111,6 +112,7 @@ internal fun FollowRow(
     onClick: () -> Unit,
     onLongClick: () -> Unit,
     onWatchedChange: (Boolean) -> Unit,
+    onRebind: () -> Unit,
 ) {
     var progressEntered by rememberSaveable { mutableStateOf(false) }
     val days = FollowDays.decode(follow.updateDays)
@@ -202,9 +204,16 @@ internal fun FollowRow(
                         options = listOf(
                             stringResource(R.string.following_not_watched),
                             stringResource(R.string.following_watched),
+                            stringResource(R.string.following_rebind_site),
                         ),
                         selectedIndex = if (watched) 1 else 0,
-                        onSelect = { index -> onWatchedChange(index == 1) },
+                        onSelect = { index ->
+                            when (index) {
+                                0 -> onWatchedChange(false)
+                                1 -> onWatchedChange(true)
+                                else -> onRebind()
+                            }
+                        },
                         contentDescription = stringResource(R.string.player_menu_more),
                     )
                 }
@@ -241,6 +250,15 @@ internal fun FollowRow(
                 if (tmdbText != null) {
                     Text(
                         text = tmdbText,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.primary,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                } else if (siteTotal != null && siteTotal > 1) {
+                    // 没有 TMDB 信息时用绑定站点的集数展示更新进度
+                    Text(
+                        text = stringResource(R.string.following_tmdb_last, siteTotal),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.primary,
                         maxLines = 1,

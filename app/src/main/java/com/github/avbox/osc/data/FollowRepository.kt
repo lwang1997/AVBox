@@ -27,6 +27,9 @@ interface FollowRepository {
     /** 更新单条追剧的 TMDB 快照，用于后台刷新。 */
     suspend fun updateTmdbInfo(id: Int, raw: String)
 
+    /** 更换追剧绑定的站点：就地更新条目，其余设置保留。 */
+    suspend fun rebind(id: Int, sourceKey: String?, vodInfo: VodInfo)
+
     suspend fun deleteSelected(ids: List<Int>)
 }
 
@@ -83,6 +86,31 @@ internal class RoomFollowRepository(
 
     override suspend fun updateTmdbInfo(id: Int, raw: String) {
         follows().updateTmdbInfo(id, raw)
+    }
+
+    override suspend fun rebind(id: Int, sourceKey: String?, vodInfo: VodInfo) {
+        val dao = follows()
+        val record = dao.getAllRaw().firstOrNull { it.id == id } ?: return
+        val vodId = vodInfo.id
+        if (record.sourceKey == sourceKey && record.vodId == vodId) return
+        val cid = record.cid ?: CurrentSubscription.cid()
+        // 旧身份写墓碑，避免同步合并后把原来的站点条目复活成重复项。
+        SyncTombstones.mark(SyncTombstones.KIND_FOLLOW, cid, record.sourceKey, record.vodId)
+        dao.getVodFollow(cid, sourceKey, vodId)?.let { duplicate ->
+            if (duplicate.id != record.id) dao.deleteSelected(listOf(duplicate.id))
+        }
+        FollowWatched.migrate(
+            FollowWatched.ownerOf(record.sourceKey, record.vodId),
+            FollowWatched.ownerOf(sourceKey, vodId),
+        )
+        record.cid = cid
+        record.sourceKey = sourceKey
+        record.vodId = vodId
+        record.name = vodInfo.name
+        if (!vodInfo.pic.isNullOrEmpty()) record.pic = vodInfo.pic
+        // 刷新时间戳：新身份在同步合并中按 LWW 生效；重新绑回旧站点时也能越过旧墓碑。
+        record.addedTime = System.currentTimeMillis()
+        dao.insert(record)
     }
 
     override suspend fun deleteSelected(ids: List<Int>) {
