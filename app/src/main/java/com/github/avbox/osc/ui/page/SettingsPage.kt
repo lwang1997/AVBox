@@ -52,7 +52,6 @@ import com.github.avbox.osc.sync.SyncBackup
 import com.github.avbox.osc.ui.ConfigManageActivity
 import com.github.avbox.osc.ui.LogViewActivity
 import com.github.avbox.osc.ui.PlaySettingsActivity
-import com.github.avbox.osc.ui.download.DownloadActivity
 import com.github.avbox.osc.ui.PreferenceSettingsActivity
 import com.github.avbox.osc.ui.SyncSettingsActivity
 import com.github.avbox.osc.ui.ThemeSettingsActivity
@@ -359,14 +358,6 @@ fun SettingsPage(
                         subtitle = stringResource(R.string.settings_play_subtitle),
                         iconRes = R.drawable.ic_settings_play,
                         onClick = { PlaySettingsActivity.start(context) },
-                    )
-                }
-                SettingsCard(SettingsCardPosition.MIDDLE) {
-                    SettingsRow(
-                        title = stringResource(R.string.download_title),
-                        subtitle = stringResource(R.string.download_settings_subtitle),
-                        iconRes = R.drawable.ic_download,
-                        onClick = { DownloadActivity.start(context) },
                     )
                 }
                 SettingsCard(SettingsCardPosition.MIDDLE) {

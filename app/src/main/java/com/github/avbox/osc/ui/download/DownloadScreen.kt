@@ -26,7 +26,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.viewmodel.compose.viewModel
 
 import com.github.avbox.osc.R
 import com.github.avbox.osc.bean.DownloadStatus
@@ -38,18 +40,6 @@ import com.github.avbox.osc.ui.components.TopBarActionBox
 
 @Composable
 fun DownloadScreen(vm: DownloadViewModel, onNavigateBack: () -> Unit) {
-    val tasks by vm.tasks.collectAsState()
-    val context = LocalContext.current
-    val active = tasks.filter { it.active }
-    val finished = tasks.filter { !it.active }
-    val clearable = tasks.count {
-        it.status == DownloadStatus.COMPLETED || it.status == DownloadStatus.CANCELED
-    }
-    // 下载完成或清空后剩余空间要重新读，不能只按任务条数缓存。
-    val freeBytes = remember(tasks.size, clearable) { DownloadStorage.freeBytes() }
-    var pendingDelete by remember { mutableStateOf<DownloadTask?>(null) }
-    var pendingClear by remember { mutableStateOf(false) }
-
     AppTopBarScaffold(
         titleContent = {
             Text(
@@ -61,22 +51,58 @@ fun DownloadScreen(vm: DownloadViewModel, onNavigateBack: () -> Unit) {
         navigationIcon = {
             TopBarActionBox(R.drawable.ic_arrow_left, stringResource(R.string.common_back), onClick = onNavigateBack)
         },
-        actions = {
-            TextButton(onClick = { if (clearable > 0) pendingClear = true }) {
-                Text(stringResource(R.string.download_clear_completed))
-            }
-        },
     ) { topPad, bottomPad ->
-        LazyColumn(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(horizontal = 16.dp),
-            contentPadding = PaddingValues(
-                top = topPad + 8.dp,
-                bottom = bottomPad + 16.dp,
-            ),
-            verticalArrangement = Arrangement.spacedBy(10.dp),
-        ) {
+        DownloadTaskList(
+            vm = vm,
+            topPadding = topPad + 8.dp,
+            bottomPadding = bottomPad + 16.dp,
+            startInset = 0.dp,
+        )
+    }
+}
+
+/** 记录页里的「下载」分段：没有自己的顶栏，列表与下载中心共用。 */
+@Composable
+internal fun DownloadTab(navStart: Dp, navBottom: Dp) {
+    val vm: DownloadViewModel = viewModel()
+    DownloadTaskList(
+        vm = vm,
+        topPadding = 8.dp,
+        bottomPadding = navBottom + 16.dp,
+        startInset = navStart,
+    )
+}
+
+@Composable
+private fun DownloadTaskList(
+    vm: DownloadViewModel,
+    topPadding: Dp,
+    bottomPadding: Dp,
+    startInset: Dp,
+) {
+    val tasks by vm.tasks.collectAsState()
+    val context = LocalContext.current
+    val active = tasks.filter { it.active }
+    val unfinished = tasks.filter { !it.active && it.status != DownloadStatus.COMPLETED }
+    val completed = tasks.filter { it.status == DownloadStatus.COMPLETED }
+    val clearable = completed.size
+    // 下载完成或清空后剩余空间要重新读，不能只按任务条数缓存。
+    val freeBytes = remember(tasks.size, clearable) { DownloadStorage.freeBytes() }
+    var pendingDelete by remember { mutableStateOf<DownloadTask?>(null) }
+    var pendingClear by remember { mutableStateOf(false) }
+
+    LazyColumn(
+        modifier = Modifier
+            .fillMaxSize()
+            .padding(start = startInset),
+        contentPadding = PaddingValues(
+            start = 16.dp,
+            end = 16.dp,
+            top = topPadding,
+            bottom = bottomPadding,
+        ),
+        verticalArrangement = Arrangement.spacedBy(10.dp),
+    ) {
             item {
                 Card(Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(14.dp)) {
@@ -90,6 +116,15 @@ fun DownloadScreen(vm: DownloadViewModel, onNavigateBack: () -> Unit) {
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant,
                         )
+                    }
+                }
+            }
+            if (clearable > 0) {
+                item {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.End) {
+                        TextButton(onClick = { pendingClear = true }) {
+                            Text(stringResource(R.string.download_clear_completed))
+                        }
                     }
                 }
             }
@@ -125,7 +160,27 @@ fun DownloadScreen(vm: DownloadViewModel, onNavigateBack: () -> Unit) {
                         )
                     }
                 }
-                if (finished.isNotEmpty()) {
+                if (unfinished.isNotEmpty()) {
+                    item {
+                        Text(
+                            text = stringResource(R.string.download_group_unfinished),
+                            style = MaterialTheme.typography.titleMedium,
+                            modifier = Modifier.padding(top = 8.dp),
+                        )
+                    }
+                    items(unfinished, key = { it.id }) { task ->
+                        DownloadItemCard(
+                            task = task,
+                            onPause = { vm.pause(task.id) },
+                            onResume = { vm.resume(task.id) },
+                            onCancel = { vm.cancel(task.id) },
+                            onRetry = { vm.retry(task.id) },
+                            onDelete = { pendingDelete = task },
+                            onOpen = { vm.open(context, task) },
+                        )
+                    }
+                }
+                if (completed.isNotEmpty()) {
                     item {
                         Text(
                             text = stringResource(R.string.download_group_finished),
@@ -133,7 +188,7 @@ fun DownloadScreen(vm: DownloadViewModel, onNavigateBack: () -> Unit) {
                             modifier = Modifier.padding(top = 8.dp),
                         )
                     }
-                    items(finished, key = { it.id }) { task ->
+                    items(completed, key = { it.id }) { task ->
                         DownloadItemCard(
                             task = task,
                             onPause = { vm.pause(task.id) },
@@ -147,7 +202,6 @@ fun DownloadScreen(vm: DownloadViewModel, onNavigateBack: () -> Unit) {
                 }
             }
         }
-    }
 
     pendingDelete?.let { task ->
         AVBoxAlertDialog(
@@ -241,9 +295,10 @@ private fun DownloadItemCard(
                     },
                     modifier = Modifier.weight(1f),
                 )
-                if (task.totalBytes > 0) {
+                val progressText = progressDetail(task)
+                if (progressText.isNotEmpty()) {
                     Text(
-                        text = formatBytes(task.downloadedBytes) + " / " + formatBytes(task.totalBytes),
+                        text = progressText,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                     )
@@ -253,6 +308,17 @@ private fun DownloadItemCard(
                 Spacer(Modifier.height(2.dp))
                 Text(
                     text = speedText(task),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                )
+            }
+            if (task.status == DownloadStatus.COMPLETED && task.completedAt > 0) {
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    text = stringResource(
+                        R.string.download_completed_at,
+                        formatCompletedAt(task.completedAt),
+                    ),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
@@ -285,10 +351,30 @@ private fun DownloadItemCard(
 }
 
 @Composable
+private fun progressDetail(task: DownloadTask): String {
+    if (task.totalBytes > 0) {
+        return formatBytes(task.downloadedBytes) + " / " + formatBytes(task.totalBytes)
+    }
+    if (task.segmentsTotal <= 0) return ""
+    val segments = stringResource(R.string.download_segments, task.segmentsDone, task.segmentsTotal)
+    return if (task.downloadedBytes > 0) {
+        formatBytes(task.downloadedBytes) + " · " + segments
+    } else {
+        segments
+    }
+}
+
+@Composable
 private fun speedText(task: DownloadTask): String {
     val speed = formatBytes(task.speedBytesPerSec)
     if (task.speedBytesPerSec <= 0) return speed
-    val remaining = task.totalBytes - task.downloadedBytes
+    // HLS 没有总大小，用“已下字节 / 已完成分片”估一个总大小来算剩余时间。
+    val remaining = when {
+        task.totalBytes > task.downloadedBytes -> task.totalBytes - task.downloadedBytes
+        task.segmentsTotal > 0 && task.segmentsDone > 0 && task.downloadedBytes > 0 ->
+            task.downloadedBytes / task.segmentsDone * task.segmentsTotal - task.downloadedBytes
+        else -> 0L
+    }
     return if (remaining > 0) {
         stringResource(
             R.string.download_speed_eta,
@@ -298,6 +384,16 @@ private fun speedText(task: DownloadTask): String {
     } else {
         stringResource(R.string.download_speed, speed)
     }
+}
+
+private fun formatCompletedAt(ms: Long): String {
+    val then = java.util.Calendar.getInstance().apply { timeInMillis = ms }
+    val now = java.util.Calendar.getInstance()
+    val sameDay = then.get(java.util.Calendar.YEAR) == now.get(java.util.Calendar.YEAR) &&
+        then.get(java.util.Calendar.DAY_OF_YEAR) == now.get(java.util.Calendar.DAY_OF_YEAR)
+    val pattern = if (sameDay) "HH:mm" else "MM-dd HH:mm"
+    return java.text.SimpleDateFormat(pattern, java.util.Locale.getDefault())
+        .format(java.util.Date(ms))
 }
 
 private fun formatDuration(seconds: Long): String {

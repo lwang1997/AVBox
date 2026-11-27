@@ -87,6 +87,7 @@
     <string name="dialog_source_disabled_message">「%1$s」先前導致應用程式死機，已被自動停用。\n\n若該源已經修好，可以重新啟用；否則切換後很可能再次閃退。</string>
     <string name="settings_group_preload_cache">預載與緩存</string>
     <string name="tab_records">記錄</string>
+    <string name="tab_download">下載</string>
     <string name="tab_following">追劇</string>
     <string name="tab_mine">我的</string>
     <string name="following_empty">暫無追劇</string>
@@ -97,7 +98,6 @@
     <string name="site_health_warn">偏慢</string>
     <string name="site_health_bad">異常</string>
     <string name="download_title">離線下載</string>
-    <string name="download_settings_subtitle">管理下載任務與下載設定</string>
     <string name="download_sheet_title">下載本集</string>
     <string name="download_save_to">儲存到 Download/AVBox</string>
     <string name="download_separate_audio_warning">此 HLS 使用獨立音軌，內建下載可能沒有聲音，建議改用 IDM+</string>
@@ -136,6 +136,9 @@
     <string name="download_empty">暫無下載任務</string>
     <string name="download_group_active">下載中</string>
     <string name="download_group_finished">已完成</string>
+    <string name="download_group_unfinished">未完成</string>
+    <string name="download_segments">%1$d/%2$d 段</string>
+    <string name="download_completed_at">完成於 %1$s</string>
     <string name="download_pause">暫停</string>
     <string name="download_resume">繼續</string>
     <string name="download_cancel">取消</string>

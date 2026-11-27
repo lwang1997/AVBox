@@ -45,11 +45,13 @@ import com.github.avbox.osc.ui.components.CapsuleSegmentedButton
 import com.github.avbox.osc.ui.components.ProvideTmdbPosterLookup
 import com.github.avbox.osc.ui.components.SegmentOption
 import com.github.avbox.osc.ui.components.SegmentStyle
+import com.github.avbox.osc.ui.download.DownloadTab
 import kotlinx.coroutines.flow.drop
 
 private enum class RecordsMode {
     History,
     Collect,
+    Download,
 }
 
 private sealed interface RecordsDialog {
@@ -86,13 +88,22 @@ fun RecordsPage(
     val collectListState = rememberLazyGridState()
 
     val isHistory = mode == RecordsMode.History
-    val editing = if (isHistory) historyEdit else collectEdit
-    val canEdit = if (isHistory) {
-        !historyIncognito && historyItems.isNotEmpty()
-    } else {
-        collectItems.isNotEmpty()
+    val isCollect = mode == RecordsMode.Collect
+    val editing = when {
+        isHistory -> historyEdit
+        isCollect -> collectEdit
+        else -> false
     }
-    val selectedCount = if (isHistory) historySelected.size else collectSelected.size
+    val canEdit = when {
+        isHistory -> !historyIncognito && historyItems.isNotEmpty()
+        isCollect -> collectItems.isNotEmpty()
+        else -> false
+    }
+    val selectedCount = when {
+        isHistory -> historySelected.size
+        isCollect -> collectSelected.size
+        else -> 0
+    }
 
     fun exitEdit() {
         historyVm.exitEdit()
@@ -142,62 +153,64 @@ fun RecordsPage(
             )
         },
         actions = {
-            AnimatedContent(
-                targetState = editing && canEdit,
-                transitionSpec = {
-                    (fadeIn(animationSpec = spring(stiffness = Spring.StiffnessMedium)) +
-                        scaleIn(initialScale = 0.8f, animationSpec = spring(stiffness = Spring.StiffnessMedium)))
-                        .togetherWith(fadeOut(animationSpec = spring(stiffness = Spring.StiffnessMedium)))
-                },
-                label = "recordsTopAction",
-            ) { managing ->
-                Row(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                ) {
-                    if (managing) {
-                        ManageActionIcon(
-                            iconRes = R.drawable.ic_check,
-                            contentDescription = stringResource(R.string.common_done),
-                            onClick = { exitEdit() },
-                        )
-                        ManageActionIcon(
-                            iconRes = R.drawable.ic_delete,
-                            contentDescription = stringResource(R.string.common_delete_selected),
-                            enabled = selectedCount > 0,
-                            onClick = {
-                                dialog = if (isHistory) {
-                                    RecordsDialog.DeleteSelectedHistory
-                                } else {
-                                    RecordsDialog.DeleteSelectedCollect
-                                }
-                            },
-                        )
-                    } else {
-                        if (canEdit) {
+            if (mode != RecordsMode.Download) {
+                AnimatedContent(
+                    targetState = editing && canEdit,
+                    transitionSpec = {
+                        (fadeIn(animationSpec = spring(stiffness = Spring.StiffnessMedium)) +
+                            scaleIn(initialScale = 0.8f, animationSpec = spring(stiffness = Spring.StiffnessMedium)))
+                            .togetherWith(fadeOut(animationSpec = spring(stiffness = Spring.StiffnessMedium)))
+                    },
+                    label = "recordsTopAction",
+                ) { managing ->
+                    Row(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        if (managing) {
                             ManageActionIcon(
-                                iconRes = R.drawable.ic_edit,
-                                contentDescription = stringResource(R.string.common_edit),
+                                iconRes = R.drawable.ic_check,
+                                contentDescription = stringResource(R.string.common_done),
+                                onClick = { exitEdit() },
+                            )
+                            ManageActionIcon(
+                                iconRes = R.drawable.ic_delete,
+                                contentDescription = stringResource(R.string.common_delete_selected),
+                                enabled = selectedCount > 0,
                                 onClick = {
-                                    if (isHistory) historyVm.enterEdit() else collectVm.enterEdit()
+                                    dialog = if (isHistory) {
+                                        RecordsDialog.DeleteSelectedHistory
+                                    } else {
+                                        RecordsDialog.DeleteSelectedCollect
+                                    }
+                                },
+                            )
+                        } else {
+                            if (canEdit) {
+                                ManageActionIcon(
+                                    iconRes = R.drawable.ic_edit,
+                                    contentDescription = stringResource(R.string.common_edit),
+                                    onClick = {
+                                        if (isHistory) historyVm.enterEdit() else collectVm.enterEdit()
+                                    },
+                                )
+                            }
+                            ManageActionIcon(
+                                iconRes = R.drawable.ic_delete,
+                                contentDescription = if (isHistory) {
+                                    stringResource(R.string.history_clear)
+                                } else {
+                                    stringResource(R.string.collect_clear)
+                                },
+                                onClick = {
+                                    dialog = if (isHistory) {
+                                        RecordsDialog.ClearHistory
+                                    } else {
+                                        RecordsDialog.ClearCollect
+                                    }
                                 },
                             )
                         }
-                        ManageActionIcon(
-                            iconRes = R.drawable.ic_delete,
-                            contentDescription = if (isHistory) {
-                                stringResource(R.string.history_clear)
-                            } else {
-                                stringResource(R.string.collect_clear)
-                            },
-                            onClick = {
-                                dialog = if (isHistory) {
-                                    RecordsDialog.ClearHistory
-                                } else {
-                                    RecordsDialog.ClearCollect
-                                }
-                            },
-                        )
                     }
                 }
             }
@@ -216,6 +229,11 @@ fun RecordsPage(
                         value = RecordsMode.Collect,
                         iconPainter = painterResource(R.drawable.ic_tab_collect),
                     ),
+                    SegmentOption(
+                        label = stringResource(R.string.tab_download),
+                        value = RecordsMode.Download,
+                        iconPainter = painterResource(R.drawable.ic_download),
+                    ),
                 ),
                 selectedValue = mode,
                 onOptionSelected = { mode = it },
@@ -229,7 +247,7 @@ fun RecordsPage(
             AnimatedContent(
                 targetState = mode,
                 transitionSpec = {
-                    val toRight = targetState == RecordsMode.Collect
+                    val toRight = targetState.ordinal > initialState.ordinal
                     (
                         slideInHorizontally(spring(stiffness = Spring.StiffnessMedium)) { full ->
                             if (toRight) full / 4 else -full / 4
@@ -255,6 +273,11 @@ fun RecordsPage(
                             navBottom = navBottom,
                         )
                     }
+
+                    RecordsMode.Download -> DownloadTab(
+                        navStart = navStart,
+                        navBottom = navBottom,
+                    )
 
                     RecordsMode.Collect -> ProvideTmdbPosterLookup(collectVm) {
                         CollectTab(

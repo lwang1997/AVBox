@@ -216,6 +216,7 @@
     <string name="music_song_index">Track %1$d</string>
     <string name="tab_home">Home</string>
     <string name="tab_records">Records</string>
+    <string name="tab_download">Downloads</string>
     <string name="tab_following">Following</string>
     <string name="tab_mine">Me</string>
     <string name="weekday_mon">Mon</string>
@@ -762,7 +763,6 @@
     <string name="site_health_warn">Slow</string>
     <string name="site_health_bad">Failed</string>
     <string name="download_title">Downloads</string>
-    <string name="download_settings_subtitle">Manage download tasks and settings</string>
     <string name="download_sheet_title">Download this episode</string>
     <string name="download_save_to">Save to Download/AVBox</string>
     <string name="download_separate_audio_warning">This HLS stream uses a separate audio track; the built-in download may have no sound. Consider IDM+.</string>
@@ -801,6 +801,9 @@
     <string name="download_empty">No downloads</string>
     <string name="download_group_active">Downloading</string>
     <string name="download_group_finished">Completed</string>
+    <string name="download_group_unfinished">Unfinished</string>
+    <string name="download_segments">%1$d/%2$d segments</string>
+    <string name="download_completed_at">Finished %1$s</string>
     <string name="download_pause">Pause</string>
     <string name="download_resume">Resume</string>
     <string name="download_cancel">Cancel</string>

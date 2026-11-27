@@ -38,7 +38,7 @@ class DownloadViewModel : ViewModel() {
     fun clearCompleted() {
         viewModelScope.launch {
             tasks.value
-                .filter { it.status == DownloadStatus.COMPLETED || it.status == DownloadStatus.CANCELED }
+                .filter { it.status == DownloadStatus.COMPLETED }
                 .forEach { runCatching { DownloadManager.delete(it.id, true) } }
         }
     }

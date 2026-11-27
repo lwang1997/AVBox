@@ -216,6 +216,7 @@
     <string name="music_song_index">第 %1$d 首</string>
     <string name="tab_home">首页</string>
     <string name="tab_records">记录</string>
+    <string name="tab_download">下载</string>
     <string name="tab_following">追剧</string>
     <string name="tab_mine">我的</string>
     <string name="weekday_mon">周一</string>
@@ -762,7 +763,6 @@
     <string name="site_health_warn">偏慢</string>
     <string name="site_health_bad">异常</string>
     <string name="download_title">离线下载</string>
-    <string name="download_settings_subtitle">管理下载任务与下载设置</string>
     <string name="download_sheet_title">下载本集</string>
     <string name="download_save_to">保存到 Download/AVBox</string>
     <string name="download_separate_audio_warning">该 HLS 使用独立音轨，内置下载可能没有声音，建议改用 IDM+</string>
@@ -801,6 +801,9 @@
     <string name="download_empty">暂无下载任务</string>
     <string name="download_group_active">下载中</string>
     <string name="download_group_finished">已完成</string>
+    <string name="download_group_unfinished">未完成</string>
+    <string name="download_segments">%1$d/%2$d 段</string>
+    <string name="download_completed_at">完成于 %1$s</string>
     <string name="download_pause">暂停</string>
     <string name="download_resume">继续</string>
     <string name="download_cancel">取消</string>
