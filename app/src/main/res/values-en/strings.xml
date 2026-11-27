@@ -521,6 +521,23 @@
     <string name="settings_github_subtitle">Open the project source repository</string>
     <string name="settings_app_tagline">Open-source video player</string>
     <string name="settings_app_version">App version</string>
+    <string name="update_pill_new_version">Update available: v%1$s</string>
+    <string name="update_checking">Checking…</string>
+    <string name="update_available_title">New version v%1$s</string>
+    <string name="update_size">Package size: %1$s</string>
+    <string name="update_notes_empty">No release notes for this version</string>
+    <string name="update_preparing">Finding the fastest download mirror…</string>
+    <string name="update_downloading">Downloading… %1$d%%</string>
+    <string name="update_download_failed">Download failed: %1$s</string>
+    <string name="update_cancel_download">Cancel download</string>
+    <string name="update_now">Update now</string>
+    <string name="update_later">Later</string>
+    <string name="update_install">Install</string>
+    <string name="update_retry">Retry</string>
+    <string name="update_up_to_date">You are up to date</string>
+    <string name="update_check_failed">Update check failed: %1$s</string>
+    <string name="update_permission_needed">Allow installing apps from unknown sources and try again</string>
+    <string name="update_install_failed">Unable to launch the installer</string>
 
     <string name="settings_preference_title">Preferences</string>
     <string name="settings_history_merge">Merge History</string>

@@ -172,4 +172,9 @@ object KVKeys {
     const val SITE_HEALTH_RESULTS = "site_health_results"
     const val SITE_HEALTH_CHECKED_AT = "site_health_checked_at"
     const val SITE_HEALTH_IDLE_LAST_AT = "site_health_idle_last_at"
+
+    // 应用更新检测
+    const val UPDATE_LAST_CHECK_AT = "update_last_check_at"
+    const val UPDATE_LAST_RESULT = "update_last_result"
+    const val UPDATE_PROMPTED_VERSION = "update_prompted_version"
 }

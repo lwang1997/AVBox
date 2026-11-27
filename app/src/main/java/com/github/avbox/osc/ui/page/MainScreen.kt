@@ -73,6 +73,7 @@ import com.github.avbox.osc.ui.components.LocalSheetDismissThen
 import com.github.avbox.osc.ui.components.LocalSheetHost
 import com.github.avbox.osc.ui.components.SheetHost
 import com.github.avbox.osc.ui.components.SheetHostState
+import com.github.avbox.osc.ui.components.UpdateAvailableDialog
 import com.github.avbox.osc.ui.currentWindowWidthClass
 import com.github.avbox.osc.ui.navbar.FloatingNavBar
 import com.github.avbox.osc.ui.navbar.GlassTabItem
@@ -83,6 +84,8 @@ import com.github.avbox.osc.ui.theme.LiquidGlassState
 import com.github.avbox.osc.util.ActivityStack
 import com.github.avbox.osc.boot.BootGuard
 import com.github.avbox.osc.util.HomeSettings
+import com.github.avbox.osc.util.update.InstallResult
+import com.github.avbox.osc.util.update.UpdateManager
 import com.kyant.backdrop.backdrops.layerBackdrop
 import com.kyant.backdrop.backdrops.rememberLayerBackdrop
 import kotlinx.coroutines.launch
@@ -98,10 +101,42 @@ private enum class AppTab(@StringRes val labelRes: Int, @DrawableRes val icon: I
 fun MainScreen() {
     LaunchedEffect(Unit) { AppBootstrap.start() }
     val boot by AppBootstrap.state.collectAsState()
+    val context = LocalContext.current
+    val updateState by UpdateManager.state.collectAsState()
+    LaunchedEffect(Unit) { UpdateManager.checkOnLaunch() }
     Box(modifier = Modifier.fillMaxSize()) {
         MainContent()
         if (boot is AppBootstrap.Boot.Error) {
             BootErrorDialog((boot as AppBootstrap.Boot.Error).msg)
+        }
+        // Boot 完成后再展示更新弹窗，避免与启动错误弹窗叠层
+        val prompt = updateState.prompt.takeIf { boot is AppBootstrap.Boot.Ready }
+        if (prompt != null) {
+            UpdateAvailableDialog(
+                info = prompt,
+                download = updateState.download,
+                checking = updateState.checking,
+                onUpdate = { UpdateManager.startDownload(context.applicationContext, prompt) },
+                onCancelDownload = { UpdateManager.cancelDownload() },
+                onInstall = { file ->
+                    when (UpdateManager.install(context.applicationContext, file)) {
+                        InstallResult.NeedPermission -> Toast.makeText(
+                            context,
+                            R.string.update_permission_needed,
+                            Toast.LENGTH_LONG,
+                        ).show()
+
+                        InstallResult.Failed -> Toast.makeText(
+                            context,
+                            R.string.update_install_failed,
+                            Toast.LENGTH_LONG,
+                        ).show()
+
+                        InstallResult.Started -> Unit
+                    }
+                },
+                onDismiss = { UpdateManager.dismissPrompt() },
+            )
         }
     }
 }

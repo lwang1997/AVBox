@@ -154,6 +154,15 @@ jobs:
           cat release_body.md
           echo "---------------------------"
 
+      - name: Inject versionCode marker into release body
+        run: |
+          set -euo pipefail
+          VC="$(grep -m1 -E '^[[:space:]]*versionCode[[:space:]]*=' app/build.gradle.kts | grep -oE '[0-9]+' | head -n1)"
+          [ -n "$VC" ] || { echo "::error::无法从 app/build.gradle.kts 解析 versionCode"; exit 1; }
+          { printf '<!-- avbox-version-code: %s -->\n\n' "$VC"; cat release_body.md; } > release_body.tmp
+          mv release_body.tmp release_body.md
+          echo "::notice::release body 注入 versionCode=$VC"
+
       - name: Upload APK to Release
         uses: softprops/action-gh-release@v3
         with:

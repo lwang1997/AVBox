@@ -165,4 +165,21 @@
     <string name="settings_download_auto_resume">啟動時自動恢復</string>
     <string name="settings_download_notify">完成時提醒</string>
     <string name="player_download_current">下載本集</string>
+    <string name="update_pill_new_version">可更新至 v%1$s</string>
+    <string name="update_checking">檢查中…</string>
+    <string name="update_available_title">發現新版本 v%1$s</string>
+    <string name="update_size">安裝包大小：%1$s</string>
+    <string name="update_notes_empty">此版本暫無更新說明</string>
+    <string name="update_preparing">正在選擇最快下載線路…</string>
+    <string name="update_downloading">正在下載… %1$d%%</string>
+    <string name="update_download_failed">下載失敗：%1$s</string>
+    <string name="update_cancel_download">取消下載</string>
+    <string name="update_now">立即更新</string>
+    <string name="update_later">稍後</string>
+    <string name="update_install">安裝</string>
+    <string name="update_retry">重試</string>
+    <string name="update_up_to_date">已是最新版本</string>
+    <string name="update_check_failed">檢查更新失敗：%1$s</string>
+    <string name="update_permission_needed">請允許安裝未知來源應用程式後重試</string>
+    <string name="update_install_failed">無法啟動安裝程式</string>
 </resources>

@@ -43,6 +43,7 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.compose.LifecycleEventEffect
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.github.avbox.osc.R
@@ -65,6 +66,7 @@ import com.github.avbox.osc.ui.components.SettingsCardPosition
 import com.github.avbox.osc.ui.components.SettingsGroup
 import com.github.avbox.osc.ui.components.SettingsOptionMenuRow
 import com.github.avbox.osc.ui.components.SettingsRow
+import com.github.avbox.osc.ui.components.UpdateAvailableDialog
 import com.github.avbox.osc.ui.settings.UiSettingsState
 import com.github.avbox.osc.util.AppLog
 import com.github.avbox.osc.util.DefaultConfig
@@ -74,6 +76,10 @@ import com.github.avbox.osc.util.PermissionHelper
 import com.github.avbox.osc.util.SearchSettingsState
 import com.github.avbox.osc.util.SpiderStorageNotice
 import com.github.avbox.osc.util.restartApp
+import com.github.avbox.osc.util.update.CheckResult
+import com.github.avbox.osc.util.update.InstallResult
+import com.github.avbox.osc.util.update.UpdateChecker
+import com.github.avbox.osc.util.update.UpdateManager
 import com.github.avbox.osc.api.TmdbPoster
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -148,6 +154,8 @@ class SettingsViewModel : ViewModel() {
         if (SystemClock.elapsedRealtime() - cacheSizeRefreshedAt < CACHE_SIZE_REFRESH_MIN_INTERVAL_MS) return
         refreshCacheSize()
     }
+
+    fun checkUpdate(onResult: (CheckResult) -> Unit) = UpdateManager.checkNow(onResult)
 
     fun clearCache(onCleared: () -> Unit = {}) {
         viewModelScope.launch {
@@ -279,6 +287,35 @@ fun SettingsPage(
     val versionName = remember { DefaultConfig.appVersionName(context) ?: "" }
     var aboutSheet by remember { mutableStateOf(false) }
 
+    val updateState by UpdateManager.state.collectAsStateWithLifecycle()
+    var showUpdateDialog by remember { mutableStateOf(false) }
+    val manualCheck: () -> Unit = {
+        showUpdateDialog = true
+        vm.checkUpdate { result ->
+            when (result) {
+                is CheckResult.UpToDate -> {
+                    showUpdateDialog = false
+                    Toast.makeText(
+                        context,
+                        context.getString(R.string.update_up_to_date),
+                        Toast.LENGTH_SHORT,
+                    ).show()
+                }
+
+                is CheckResult.Failed -> {
+                    showUpdateDialog = false
+                    Toast.makeText(
+                        context,
+                        context.getString(R.string.update_check_failed, result.message),
+                        Toast.LENGTH_LONG,
+                    ).show()
+                }
+
+                is CheckResult.Available -> Unit
+            }
+        }
+    }
+
     // 本地备份：导出自动写入 手机存储/AVBox/backup；恢复优先列该目录里的备份，系统选择器只作「其它位置」兜底
     var pendingImportUri by remember { mutableStateOf<Uri?>(null) }
     var pendingImportFile by remember { mutableStateOf<File?>(null) }
@@ -321,7 +358,12 @@ fun SettingsPage(
         ) {
             Spacer(Modifier.height(topPad - 20.dp))
 
-            AppInfoHeaderCard(versionName = versionName)
+            AppInfoHeaderCard(
+                versionName = versionName,
+                checking = updateState.checking,
+                availableVersion = updateState.available?.versionName,
+                onVersionClick = manualCheck,
+            )
 
             if (PendingRestart.pending) {
                 SettingsGroup(title = null) {
@@ -638,6 +680,35 @@ fun SettingsPage(
     if (showRestartPrompt) {
         RestartPromptDialog(R.string.settings_restart_after_backup) { showRestartPrompt = false }
     }
+
+    val availableUpdate = updateState.available
+    if (showUpdateDialog && availableUpdate != null) {
+        UpdateAvailableDialog(
+            info = availableUpdate,
+            download = updateState.download,
+            checking = updateState.checking,
+            onUpdate = { UpdateManager.startDownload(context.applicationContext, availableUpdate) },
+            onCancelDownload = { UpdateManager.cancelDownload() },
+            onInstall = { file ->
+                when (UpdateManager.install(context.applicationContext, file)) {
+                    InstallResult.NeedPermission -> Toast.makeText(
+                        context,
+                        R.string.update_permission_needed,
+                        Toast.LENGTH_LONG,
+                    ).show()
+
+                    InstallResult.Failed -> Toast.makeText(
+                        context,
+                        R.string.update_install_failed,
+                        Toast.LENGTH_LONG,
+                    ).show()
+
+                    InstallResult.Started -> Unit
+                }
+            },
+            onDismiss = { showUpdateDialog = false },
+        )
+    }
 }
 
 @Composable
@@ -730,7 +801,7 @@ private fun toastImportResult(context: Context, result: SyncBackup.ImportResult)
 
 private const val AboutSheetHeightFraction = 0.6f
 
-private const val GITHUB_REPO_URL = "https://github.com/XiaochangXu/AVBox"
+private val GITHUB_REPO_URL = "https://github.com/${UpdateChecker.REPO}"
 
 private fun openExternalUrl(context: Context, url: String) {
     try {
