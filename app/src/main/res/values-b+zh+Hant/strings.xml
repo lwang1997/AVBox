@@ -560,6 +560,8 @@
     <string name="settings_m3u8_purify">M3U8 淨化</string>
     <string name="settings_logs_title">日誌記錄</string>
     <string name="settings_logs_subtitle">查看應用程式執行日誌</string>
+    <string name="settings_logs_hidden_enabled">日誌已開啟，已顯示「日誌記錄」入口</string>
+    <string name="settings_logs_hidden_disabled">日誌已關閉，已隱藏「日誌記錄」入口</string>
     <string name="log_empty">暫無日誌</string>
     <string name="log_export">匯出日誌</string>
     <string name="log_export_done">已匯出日誌</string>
