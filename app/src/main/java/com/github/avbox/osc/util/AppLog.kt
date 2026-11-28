@@ -24,14 +24,50 @@ object AppLog {
     private const val RING_MAX = 1500
     private val ring = ArrayDeque<LogLine>()
 
-    private fun captureEnabled(level: Char): Boolean = try {
-        when (KV.get(KVKeys.LOG_LEVEL, 0)) {
-            1 -> level == 'E'
-            2 -> false
-            else -> true
+    private fun captureEnabled(level: Char): Boolean {
+        if (!isLogEnabled()) return false
+        return try {
+            when (KV.get(KVKeys.LOG_LEVEL, 0)) {
+                1 -> level == 'E'
+                2 -> false
+                else -> true
+            }
+        } catch (t: Throwable) {
+            level == 'E'
         }
-    } catch (t: Throwable) {
-        level == 'E'
+    }
+
+    // ------------------------------------------------------------------
+    // 日志总开关：默认跟随构建类型（debug 开、release 关）。
+    // release 下设置页不显示「日志记录」入口，连续点版本号 5 次才打开（见 SettingsPage）。
+    // 注意：proguard-rules.pro 里不能再对 AppLog 用 -assumenosideeffects，否则调用点被 R8 删掉，开关失效。
+    // ------------------------------------------------------------------
+    @Volatile
+    private var logEnabledOverride: Boolean? = null
+
+    @JvmStatic
+    fun isLogEnabled(): Boolean {
+        logEnabledOverride?.let { return it }
+        return try {
+            KV.get(KVKeys.LOG_ENABLED, BuildConfig.DEBUG)
+        } catch (t: Throwable) {
+            BuildConfig.DEBUG
+        }
+    }
+
+    @JvmStatic
+    fun setLogEnabled(enabled: Boolean) {
+        logEnabledOverride = enabled
+        try {
+            KV.put(KVKeys.LOG_ENABLED, enabled)
+        } catch (ignored: Throwable) {
+        }
+        if (!enabled) {
+            synchronized(ring) { ring.clear() }
+            executeFileTask { closeUserFile() }
+        } else if (isFileLogEnabled()) {
+            executeFileTask { ensureUserFile() }
+        }
     }
 
     private fun capture(level: Char, msg: String?) {
@@ -293,7 +329,7 @@ object AppLog {
         capture('E', if (tr == null) "$tag: $msg" else "$tag: $msg | $tr")
         Log.e(TAG, tag + ": " + msg, tr)
         fileLog("E", msg.toString())
-        if (tr != null) tr.printStackTrace()
+        if (tr != null && isLogEnabled()) tr.printStackTrace()
     }
 
     @JvmStatic

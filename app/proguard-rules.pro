@@ -252,6 +252,9 @@
 -dontwarn com.kyant.capsule.**
 -dontwarn com.kyant.shapes.**
 
+# 只裁 logcat 输出。AppLog（应用内日志页 / AVBox/log/avbox.log）不在这里裁：
+# release 的日志由运行期总开关 AppLog.isLogEnabled() 控制，默认关闭；
+# 若把 AppLog 加进 assumenosideeffects，R8 会连调用点一起删掉，开关就失效了。
 -assumenosideeffects class android.util.Log {
     public static *** v(...);
     public static *** d(...);
@@ -264,15 +267,6 @@
 
 -assumenosideeffects class com.github.catvod.crawler.SpiderDebug {
     public static *** log(...);
-}
-
--assumenosideeffects class com.github.avbox.osc.util.AppLog {
-    public static *** d(...);
-    public static *** i(...);
-    public static *** e(...);
-    public static *** debugI(...);
-    public static *** longI(...);
-    public static *** longE(...);
 }
 
 -assumenosideeffects class com.undcover.freedom.pyramid.PyLog {

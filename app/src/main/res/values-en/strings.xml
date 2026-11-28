@@ -560,6 +560,8 @@
     <string name="settings_m3u8_purify">M3U8 Purify</string>
     <string name="settings_logs_title">Logs</string>
     <string name="settings_logs_subtitle">View app runtime logs</string>
+    <string name="settings_logs_hidden_enabled">Logging enabled. Logs entry is now shown.</string>
+    <string name="settings_logs_hidden_disabled">Logging disabled. Logs entry is hidden.</string>
     <string name="log_empty">No logs yet</string>
     <string name="log_export">Export logs</string>
     <string name="log_export_done">Logs exported</string>

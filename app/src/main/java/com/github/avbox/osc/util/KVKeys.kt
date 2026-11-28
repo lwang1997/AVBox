@@ -56,6 +56,7 @@ object KVKeys {
     const val M3U8_PURIFY = "m3u8_purify"
     const val LOG_LEVEL = "log_level"
     const val LOG_TO_FILE = "log_to_file"
+    const val LOG_ENABLED = "log_enabled"
     const val DETAIL_PLAY_FULLSCREEN = "detail_play_fullscreen"
     const val DETAIL_EPISODE_LIST_WIDE = "detail_episode_list_wide"
     const val PICTURE_IN_PICTURE_AUTO = "picture_in_picture_auto"

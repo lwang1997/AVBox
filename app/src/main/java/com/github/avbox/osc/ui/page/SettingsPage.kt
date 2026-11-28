@@ -31,8 +31,11 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.State
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
@@ -82,6 +85,7 @@ import com.github.avbox.osc.util.update.UpdateChecker
 import com.github.avbox.osc.util.update.UpdateManager
 import com.github.avbox.osc.api.TmdbPoster
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.io.File
@@ -91,6 +95,15 @@ import java.util.Date
 import java.util.Locale
 
 private const val CACHE_SIZE_REFRESH_MIN_INTERVAL_MS = 60_000L
+
+/** 版本号连点 5 次切换日志总开关：release 默认关闭且隐藏「日志记录」入口，连点才出现 */
+private const val VERSION_TAP_COUNT = 5
+
+/** 两次点击间隔超过这个值就不算「连续点击」，重新从 1 计数 */
+private const val VERSION_TAP_GAP_MS = 1_500L
+
+/** 单次点击等这么久没等到下一次点击，才当作「检查更新」，避免连点过程中弹更新对话框 */
+private const val VERSION_TAP_DEBOUNCE_MS = 500L
 
 /** 备份目录：手机存储/AVBox/backup（与 AVBox 其它产物分开，用户可在文件管理器直达） */
 private const val AVBOX_DIR_NAME = "AVBox"
@@ -316,6 +329,42 @@ fun SettingsPage(
         }
     }
 
+    // 日志总开关：release 默认关闭且不显示「日志记录」入口；连续点版本号 5 次打开（再点 5 次关闭）
+    var logEntryVisible by remember { mutableStateOf(AppLog.isLogEnabled()) }
+    var versionTapCount by remember { mutableIntStateOf(0) }
+    var versionTapAt by remember { mutableLongStateOf(0L) }
+    val versionTapScope = rememberCoroutineScope()
+    val onVersionTap: () -> Unit = {
+        val now = SystemClock.elapsedRealtime()
+        versionTapCount = if (now - versionTapAt > VERSION_TAP_GAP_MS) 1 else versionTapCount + 1
+        versionTapAt = now
+        if (versionTapCount >= VERSION_TAP_COUNT) {
+            versionTapCount = 0
+            val enabled = !AppLog.isLogEnabled()
+            AppLog.setLogEnabled(enabled)
+            logEntryVisible = enabled
+            Toast.makeText(
+                context,
+                context.getString(
+                    if (enabled) R.string.settings_logs_hidden_enabled
+                    else R.string.settings_logs_hidden_disabled,
+                ),
+                Toast.LENGTH_SHORT,
+            ).show()
+        } else {
+            // 手停下才当作普通点击（检查更新），连点时不弹更新对话框
+            versionTapScope.launch {
+                delay(VERSION_TAP_DEBOUNCE_MS)
+                if (versionTapCount < VERSION_TAP_COUNT &&
+                    SystemClock.elapsedRealtime() - versionTapAt >= VERSION_TAP_DEBOUNCE_MS
+                ) {
+                    versionTapCount = 0
+                    manualCheck()
+                }
+            }
+        }
+    }
+
     // 本地备份：导出自动写入 手机存储/AVBox/backup；恢复优先列该目录里的备份，系统选择器只作「其它位置」兜底
     var pendingImportUri by remember { mutableStateOf<Uri?>(null) }
     var pendingImportFile by remember { mutableStateOf<File?>(null) }
@@ -362,7 +411,7 @@ fun SettingsPage(
                 versionName = versionName,
                 checking = updateState.checking,
                 availableVersion = updateState.available?.versionName,
-                onVersionClick = manualCheck,
+                onVersionClick = onVersionTap,
             )
 
             if (PendingRestart.pending) {
@@ -626,13 +675,15 @@ fun SettingsPage(
                     }
                 }
 
-                SettingsCard(SettingsCardPosition.MIDDLE) {
-                    SettingsRow(
-                        title = stringResource(R.string.settings_logs_title),
-                        subtitle = stringResource(R.string.settings_logs_subtitle),
-                        iconRes = R.drawable.ic_settings_log,
-                        onClick = { LogViewActivity.start(context) },
-                    )
+                if (logEntryVisible) {
+                    SettingsCard(SettingsCardPosition.MIDDLE) {
+                        SettingsRow(
+                            title = stringResource(R.string.settings_logs_title),
+                            subtitle = stringResource(R.string.settings_logs_subtitle),
+                            iconRes = R.drawable.ic_settings_log,
+                            onClick = { LogViewActivity.start(context) },
+                        )
+                    }
                 }
 
                 SettingsCard(SettingsCardPosition.MIDDLE) {
