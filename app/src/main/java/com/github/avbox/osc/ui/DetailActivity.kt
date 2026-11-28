@@ -145,30 +145,29 @@ class DetailActivity : BaseActivity(), PageHost {
         onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
             override fun handleOnBackPressed() {
                 val container = playContainer
-                if (vm.enteringFullscreen.value) {
-                    vm.cancelEntrySlide()
-                    container?.stopForExitFullscreen()
-                    return
-                }
-                if (vm.exitingFullscreen.value) return
-                if (vm.fullScreen.value) {
-                    if (container != null && container.onBackPressed()) return
-                    // 退出全屏回小窗：视频继续播放，不调用 stopForExitFullscreen（那会暂停并释放播放）
-                    vm.onFullScreenToggleRequested(false, playbackFacts())
-                    container?.hideTipOnUiThread()
-                } else {
-                    // 悬浮（小窗）播放器开着时，X/返回只关闭播放器，留在详情页
-                    if (container != null) {
-                        closeInlinePlayer()
-                        return
+                when (
+                    DetailBackDecision.decide(
+                        entering = vm.enteringFullscreen.value,
+                        exiting = vm.exitingFullscreen.value,
+                        fullScreen = vm.fullScreen.value,
+                        hasInlinePlayer = container != null,
+                    )
+                ) {
+                    DetailBackAction.CancelEntry -> vm.cancelEntrySlide()
+                    DetailBackAction.IgnoreTransition -> Unit
+                    DetailBackAction.ExitFullscreen -> {
+                        // 退出全屏回小窗：视频继续播放，不调用 stopForExitFullscreen（那会暂停并释放播放）
+                        vm.onFullScreenToggleRequested(false, playbackFacts())
+                        container?.hideTipOnUiThread()
                     }
-                    if (vm.backToPreviousTarget()) {
-                        pendingEpisodeSync = false
-                        return
+                    DetailBackAction.CloseInlinePlayer -> closeInlinePlayer()
+                    DetailBackAction.PageBack -> {
+                        if (vm.backToPreviousTarget()) {
+                            pendingEpisodeSync = false
+                            return
+                        }
+                        finish()
                     }
-                    container?.setPlayTitle(false)
-                    container?.setExitingPreview(true)
-                    finish()
                 }
             }
         })

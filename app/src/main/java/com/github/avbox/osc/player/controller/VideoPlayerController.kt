@@ -573,19 +573,6 @@ class VideoPlayerController(
         config.applySpeedWhenReady()
     }
 
-    override fun onBackPressed(): Boolean {
-        if (state.isClickBackBtn) {
-            state.updateIsClickBackBtn(false)
-            if (state.controlsVisible) actions.hideBottom()
-            return false
-        }
-        if (state.controlsVisible) {
-            actions.hideBottom()
-            return true
-        }
-        return false
-    }
-
     override fun switchPlayer(): Boolean = PlayerSwitchUseCase.switchPlayer()
 
     override fun stopOther() {

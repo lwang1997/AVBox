@@ -60,8 +60,6 @@ interface PlayerControlApi {
 
     fun resetSpeed()
 
-    fun onBackPressed(): Boolean
-
     fun switchPlayer(): Boolean
 
     fun stopOther()

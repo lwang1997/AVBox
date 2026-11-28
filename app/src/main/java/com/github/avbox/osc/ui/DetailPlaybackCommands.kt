@@ -17,6 +17,36 @@ data class DetailPlaybackFacts(
     val landscape: Boolean,
 )
 
+/** 详情页返回键的落点：只看导航层级，不看播放器控件是否可见。 */
+internal sealed interface DetailBackAction {
+
+    data object CancelEntry : DetailBackAction
+
+    data object IgnoreTransition : DetailBackAction
+
+    data object ExitFullscreen : DetailBackAction
+
+    data object CloseInlinePlayer : DetailBackAction
+
+    data object PageBack : DetailBackAction
+}
+
+internal object DetailBackDecision {
+
+    fun decide(
+        entering: Boolean,
+        exiting: Boolean,
+        fullScreen: Boolean,
+        hasInlinePlayer: Boolean,
+    ): DetailBackAction = when {
+        entering -> DetailBackAction.CancelEntry
+        exiting -> DetailBackAction.IgnoreTransition
+        fullScreen -> DetailBackAction.ExitFullscreen
+        hasInlinePlayer -> DetailBackAction.CloseInlinePlayer
+        else -> DetailBackAction.PageBack
+    }
+}
+
 internal object DetailPlaybackCommands {
 
     fun exitFullScreenState(facts: DetailPlaybackFacts): Pair<Boolean, Boolean> = false to facts.landscape

@@ -223,10 +223,12 @@ fun DetailScreen(activity: DetailActivity, vm: DetailViewModel) {
     LaunchedEffect(enteringFullscreen, exitingFullscreen) {
         when {
             exitingFullscreen -> {
-                slideAnim.animateTo(0f, tween(EntrySlideDurationMs, easing = FastOutSlowInEasing))
+                // 收尾必须无条件执行：animateTo 被取消时若跳过 onExitSlideFinished，
+                // exitingFullscreen 会永久为 true，返回键从此只剩 IgnoreTransition
                 try {
-                    vm.onExitSlideFinished()
+                    slideAnim.animateTo(0f, tween(EntrySlideDurationMs, easing = FastOutSlowInEasing))
                 } finally {
+                    vm.onExitSlideFinished()
                     activity.settleRotationAfterExit()
                 }
             }

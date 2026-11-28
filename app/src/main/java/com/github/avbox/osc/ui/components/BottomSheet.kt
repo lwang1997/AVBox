@@ -310,7 +310,8 @@ private fun SheetOverlay(
         onDispose { if (plainDismissPending) onDismissRequest() }
     }
 
-    BackHandler(enabled = entered) { dismissWithAnimation() }
+    // 入场动画期间也要吃掉返回：否则按键会穿透到 Activity 直接退全屏
+    BackHandler(enabled = true) { dismissWithAnimation() }
 
     val scrimColor = if (centered) {
         BottomSheetDefaults.ScrimColor.copy(alpha = DIALOG_SCRIM_ALPHA)

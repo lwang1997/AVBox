@@ -473,8 +473,6 @@ class PlaybackEngine(context: Context) : PlaybackHostApi, VideoCodecObserver {
     override fun toggleControllerControls() {
     }
 
-    override fun onBackPressed(): Boolean = false
-
     override fun setExitingPreview(exitingPreview: Boolean) {
     }
 

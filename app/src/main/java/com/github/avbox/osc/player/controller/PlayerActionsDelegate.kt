@@ -263,7 +263,6 @@ internal class PlayerActionsDelegate(private val host: VideoPlayerController) : 
     }
 
     override fun onBackClicked() {
-        host.state.updateIsClickBackBtn(host.state.controlsVisible && !host.state.previewMode)
         (host.playerActivity() as? ComponentActivity)?.onBackPressedDispatcher?.onBackPressed()
     }
 

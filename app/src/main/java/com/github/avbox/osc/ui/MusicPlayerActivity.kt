@@ -416,8 +416,6 @@ class MusicPlayerActivity : BaseActivity(), PlaybackPage {
 
         override fun toggleControllerControls() {}
 
-        override fun onBackPressed(): Boolean = false
-
         override fun setExitingPreview(exitingPreview: Boolean) {}
 
         override fun setPlayTitle(show: Boolean) {}

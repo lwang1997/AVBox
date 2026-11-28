@@ -18,8 +18,6 @@ interface PlaybackHostApi {
 
     fun toggleControllerControls()
 
-    fun onBackPressed(): Boolean
-
     fun setExitingPreview(exitingPreview: Boolean)
 
     fun setPlayTitle(show: Boolean)

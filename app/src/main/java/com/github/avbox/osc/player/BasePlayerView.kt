@@ -667,8 +667,6 @@ open class BasePlayerView @JvmOverloads constructor(
 
     open fun doScreenShot(): Bitmap? = activeRenderView?.doScreenShot()
 
-    open fun onBackPressed(): Boolean = false
-
     open fun attachContainerTo(host: ViewGroup?) {
         if (host == null) return
         val parent = playerFrame.parent as? ViewGroup

@@ -272,9 +272,6 @@ class PlayerUiState {
     var speedOld: Float by mutableStateOf(1.0f)
         private set
 
-    var isClickBackBtn: Boolean by mutableStateOf(false)
-        private set
-
     var exitPaused: Boolean by mutableStateOf(false)
         private set
 
@@ -373,10 +370,6 @@ class PlayerUiState {
 
     fun updateIsPortrait(value: Boolean) {
         isPortrait = value
-    }
-
-    fun updateIsClickBackBtn(value: Boolean) {
-        isClickBackBtn = value
     }
 
     fun updateSeekHintVisible(value: Boolean) {

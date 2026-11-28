@@ -779,10 +779,6 @@ class PlayContainer(activity: Activity) : FrameLayout(activity), CustomAdapt, Pl
         return state != PlayState.ERROR && state != PlayState.IDLE
     }
 
-    override fun onBackPressed(): Boolean {
-        return playerController.onBackPressed()
-    }
-
     fun isPortraitVideo(): Boolean {
         return kernelView?.isPortraitVideo() == true
     }
